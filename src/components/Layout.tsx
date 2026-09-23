@@ -62,76 +62,76 @@ export function Layout({ children }: Props) {
           borderLeft: '1px solid #1e2535',
           display: 'flex',
           flexDirection: 'column',
-          padding: '6px 4px',
-          gap: '4px',
+          overflow: 'hidden',
         }}>
-          {NAV.map(({ to, lines, color }) => {
-            const active = location.pathname === to;
-            return (
-              <Link
-                key={to}
-                to={to}
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: '8px 4px',
-                  minHeight: '44px',
-                  background: active ? '#161b27' : 'transparent',
-                  border: '1px solid',
-                  borderColor: active ? '#2d3a52' : 'transparent',
-                  borderRadius: '6px',
-                  textDecoration: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                {lines.map((line, i) => (
-                  <span key={i} style={{
-                    color: active ? '#ffffff' : color,
-                    fontWeight: 'bold',
-                    fontSize: '10px',
-                    lineHeight: '1.4',
-                    letterSpacing: '0.04em',
-                    textAlign: 'center',
-                    display: 'block',
-                  }}>
-                    {line}
-                  </span>
-                ))}
-              </Link>
-            );
-          })}
-
-          <div style={{ flex: 1 }} />
-
-          {/* Team badge */}
-          <div style={{ textAlign: 'center', padding: '4px 0' }}>
-            <img
-              src={img(`wappen${String(managedTeamId).padStart(2, '0')}.png`)}
-              style={{ width: '60px', height: '60px', imageRendering: 'pixelated', display: 'block', margin: '0 auto' }}
-              alt=""
-            />
+          {/* Scrollable nav items */}
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', padding: '6px 4px', gap: '4px' }}>
+            {NAV.map(({ to, lines, color }) => {
+              const active = location.pathname === to;
+              return (
+                <Link
+                  key={to}
+                  to={to}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '8px 4px',
+                    minHeight: '44px',
+                    background: active ? '#161b27' : 'transparent',
+                    border: '1px solid',
+                    borderColor: active ? '#2d3a52' : 'transparent',
+                    borderRadius: '6px',
+                    textDecoration: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {lines.map((line, i) => (
+                    <span key={i} style={{
+                      color: active ? '#ffffff' : color,
+                      fontWeight: 'bold',
+                      fontSize: '10px',
+                      lineHeight: '1.4',
+                      letterSpacing: '0.04em',
+                      textAlign: 'center',
+                      display: 'block',
+                    }}>
+                      {line}
+                    </span>
+                  ))}
+                </Link>
+              );
+            })}
           </div>
 
-          {/* Exit button */}
-          <button
-            onClick={() => navigate('/')}
-            style={{
-              background: '#1a0a0a',
-              border: '1px solid #4a1a1a',
-              color: '#f87171',
-              padding: '6px 4px',
-              cursor: 'pointer',
-              borderRadius: '4px',
-              fontSize: '10px',
-              fontWeight: 'bold',
-              width: '100%',
-              marginTop: '4px',
-            }}
-          >
-            EXIT GAME
-          </button>
+          {/* Always-visible bottom: badge + exit */}
+          <div style={{ flexShrink: 0, padding: '4px', borderTop: '1px solid #1e2535' }}>
+            <div style={{ textAlign: 'center', padding: '4px 0' }}>
+              <img
+                src={img(`wappen${String(managedTeamId).padStart(2, '0')}.png`)}
+                style={{ width: '56px', height: '56px', imageRendering: 'pixelated', display: 'block', margin: '0 auto' }}
+                alt=""
+              />
+            </div>
+            <button
+              onClick={() => navigate('/')}
+              style={{
+                background: '#1a0a0a',
+                border: '1px solid #4a1a1a',
+                color: '#f87171',
+                padding: '6px 4px',
+                cursor: 'pointer',
+                borderRadius: '4px',
+                fontSize: '10px',
+                fontWeight: 'bold',
+                width: '100%',
+                marginTop: '4px',
+              }}
+            >
+              EXIT GAME
+            </button>
+          </div>
         </nav>
       </div>
     </div>
