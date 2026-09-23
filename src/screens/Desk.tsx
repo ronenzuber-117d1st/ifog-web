@@ -6,7 +6,7 @@ import { TICKET_TYPES, TICKET_PRICE_PRESETS, FOOD_REVENUE_PER_MATCH, MERCH_REVEN
 
 type DeskTab = 'desk' | 'personnel' | 'cash-season' | 'cash-week';
 
-const RAISED = { border: '2px solid', borderColor: '#ffffff #808080 #808080 #ffffff' } as const;
+const CARD = { background: '#161b27', border: '1px solid #28314a', borderRadius: '8px' } as const;
 
 export function Desk() {
   const { managerName, currentMatchday, balance, financeHistory, priceLevel, foodEnabled, merchandiseEnabled, setPriceLevel, setFoodEnabled, setMerchandiseEnabled, rosters, managedTeamId } = useGameStore();
@@ -22,31 +22,33 @@ export function Desk() {
 
   return (
     <Layout>
-      <div style={{ background: '#c0c0c0', minHeight: 'calc(100vh - 28px)', fontFamily: 'Arial, system-ui', fontSize: '13px' }}>
+      <div style={{ background: '#0d1117', minHeight: 'calc(100vh - 28px)', fontFamily: 'Arial, system-ui', fontSize: '13px' }}>
 
-        {/* Desk image */}
+        {/* Desk image header */}
         <div style={{ position: 'relative', overflow: 'hidden', height: '130px' }}>
           <img src={img('sekretba.png')} style={{ width: '100%', height: '100%', objectFit: 'cover', imageRendering: 'pixelated', display: 'block' }} alt="" />
-          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'rgba(0,0,0,0.4)', padding: '4px 8px' }}>
-            <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '12px' }}>Manager: {managerName}</span>
+          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.7))', padding: '8px 12px' }}>
+            <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '13px' }}>Manager: {managerName}</span>
           </div>
         </div>
 
         {/* Sub-tabs */}
-        <div style={{ display: 'flex', paddingLeft: '4px', borderBottom: '2px solid #808080', background: '#c0c0c0', paddingTop: '4px' }}>
+        <div style={{ display: 'flex', padding: '10px 10px 0', gap: '4px', borderBottom: '1px solid #1e2535' }}>
           {(['desk', 'personnel', 'cash-season', 'cash-week'] as DeskTab[]).map(t => {
             const labels = { desk: 'Desk', personnel: 'Personnel', 'cash-season': 'Cash Season', 'cash-week': 'Cash Week' };
             const active = tab === t;
             return (
               <button key={t} onClick={() => setTab(t)} style={{
-                padding: '3px 12px', fontSize: '11px',
+                padding: '6px 14px', fontSize: '11px',
                 fontWeight: active ? 'bold' : 'normal',
-                background: '#c0c0c0', cursor: 'pointer',
-                border: '2px solid',
-                borderColor: '#ffffff #808080 ' + (active ? '#c0c0c0' : '#808080') + ' #ffffff',
-                borderBottom: active ? '2px solid #c0c0c0' : undefined,
-                marginRight: '2px', marginBottom: active ? '-2px' : '0',
-                position: 'relative', zIndex: active ? 1 : 0, color: '#000',
+                background: active ? '#161b27' : 'transparent',
+                cursor: 'pointer',
+                border: '1px solid',
+                borderColor: active ? '#28314a' : 'transparent',
+                borderRadius: '6px 6px 0 0',
+                marginBottom: active ? '-1px' : '0',
+                position: 'relative', zIndex: active ? 1 : 0,
+                color: active ? '#ffffff' : '#64748b',
               }}>
                 {labels[t]}
               </button>
@@ -57,27 +59,29 @@ export function Desk() {
         <div style={{ padding: '10px' }}>
           {tab === 'desk' && (
             <div style={{ display: 'flex', gap: '10px', flexDirection: 'column' }}>
-              <div style={{ ...RAISED, background: '#c0c0c0', padding: '12px' }}>
-                <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Ticket Pricing</div>
-                <div style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+              <div style={{ ...CARD, padding: '14px' }}>
+                <div style={{ fontWeight: 'bold', marginBottom: '12px', color: '#e2e8f0' }}>Ticket Pricing</div>
+                <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
                   {(['low', 'medium', 'high'] as const).map(level => (
                     <button key={level} onClick={() => setPriceLevel(level)} style={{
-                      ...RAISED, background: priceLevel === level ? '#000080' : '#c0c0c0',
-                      color: priceLevel === level ? '#fff' : '#000',
-                      padding: '5px 14px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', textTransform: 'capitalize',
+                      background: priceLevel === level ? '#1e40af' : '#0d1117',
+                      border: `1px solid ${priceLevel === level ? '#3b82f6' : '#28314a'}`,
+                      borderRadius: '6px',
+                      color: priceLevel === level ? '#ffffff' : '#94a3b8',
+                      padding: '6px 18px', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold', textTransform: 'capitalize',
                     }}>{level}</button>
                   ))}
                 </div>
                 <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
                   {TICKET_TYPES.map((t, i) => (
-                    <div key={t.name} style={{ fontSize: '11px', color: '#444' }}>
-                      {t.name}: <strong>£{prices[i]}</strong>
+                    <div key={t.name} style={{ fontSize: '11px', color: '#94a3b8' }}>
+                      {t.name}: <strong style={{ color: '#4ade80' }}>£{prices[i]}</strong>
                     </div>
                   ))}
                 </div>
               </div>
-              <div style={{ ...RAISED, background: '#c0c0c0', padding: '12px' }}>
-                <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Stadium Revenue</div>
+              <div style={{ ...CARD, padding: '14px' }}>
+                <div style={{ fontWeight: 'bold', marginBottom: '12px', color: '#e2e8f0' }}>Stadium Revenue</div>
                 <ToggleRow label="Food Stand" sub={`+£${(FOOD_REVENUE_PER_MATCH / 1000).toFixed(0)}K per home match`} value={foodEnabled} onChange={setFoodEnabled} />
                 <ToggleRow label="Club Shop" sub={`+£${(MERCH_REVENUE_PER_MATCH / 1000).toFixed(0)}K per home match`} value={merchandiseEnabled} onChange={setMerchandiseEnabled} />
               </div>
@@ -85,27 +89,27 @@ export function Desk() {
           )}
 
           {tab === 'personnel' && (
-            <div style={{ ...RAISED, background: '#c0c0c0', padding: '12px' }}>
-              <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>Squad Status</div>
+            <div style={{ ...CARD, padding: '14px' }}>
+              <div style={{ fontWeight: 'bold', marginBottom: '10px', color: '#e2e8f0' }}>Squad Status</div>
               {injured.length === 0 && suspended.length === 0 ? (
-                <div style={{ color: '#006600' }}>✓ All players available</div>
+                <div style={{ color: '#4ade80', fontSize: '13px' }}>✓ All players available</div>
               ) : (
                 <>
                   {injured.length > 0 && (
-                    <div>
-                      <div style={{ color: '#cc0000', fontWeight: 'bold', marginBottom: '4px' }}>Injured:</div>
+                    <div style={{ marginBottom: '12px' }}>
+                      <div style={{ color: '#f87171', fontWeight: 'bold', marginBottom: '6px', fontSize: '12px' }}>INJURED</div>
                       {injured.map(p => (
-                        <div key={p.id} style={{ fontSize: '12px', padding: '3px 0', borderBottom: '1px solid #ccc' }}>
-                          {p.name} — out for {p.injuredFor} matchday{p.injuredFor > 1 ? 's' : ''}
+                        <div key={p.id} style={{ fontSize: '12px', padding: '6px 0', borderBottom: '1px solid #1e2535', color: '#e2e8f0' }}>
+                          {p.name} <span style={{ color: '#94a3b8' }}>— out for {p.injuredFor} matchday{p.injuredFor > 1 ? 's' : ''}</span>
                         </div>
                       ))}
                     </div>
                   )}
                   {suspended.length > 0 && (
-                    <div style={{ marginTop: '10px' }}>
-                      <div style={{ color: '#cc8800', fontWeight: 'bold', marginBottom: '4px' }}>Suspended:</div>
+                    <div>
+                      <div style={{ color: '#f59e0b', fontWeight: 'bold', marginBottom: '6px', fontSize: '12px' }}>SUSPENDED</div>
                       {suspended.map(p => (
-                        <div key={p.id} style={{ fontSize: '12px', padding: '3px 0', borderBottom: '1px solid #ccc' }}>
+                        <div key={p.id} style={{ fontSize: '12px', padding: '6px 0', borderBottom: '1px solid #1e2535', color: '#e2e8f0' }}>
                           {p.name}
                         </div>
                       ))}
@@ -117,15 +121,15 @@ export function Desk() {
           )}
 
           {tab === 'cash-season' && (
-            <div style={{ ...RAISED, background: '#0000aa', padding: '12px', color: '#ffffff' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
-                <div style={{ fontWeight: 'bold' }}>EARNINGS</div>
-                <div style={{ fontWeight: 'bold' }}>COSTS</div>
+            <div style={{ background: '#0a0028', border: '1px solid #1a0060', borderRadius: '8px', padding: '14px', color: '#ffffff' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '14px' }}>
+                <div style={{ fontWeight: 'bold', color: '#88ff88' }}>EARNINGS</div>
+                <div style={{ fontWeight: 'bold', color: '#ff8888' }}>COSTS</div>
               </div>
               <div style={{ display: 'flex', gap: '20px' }}>
                 <div style={{ flex: 1 }}>
                   {recent.filter(e => e.amount > 0).slice(0, 8).map((e, i) => (
-                    <div key={i} style={{ fontSize: '11px', display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
+                    <div key={i} style={{ fontSize: '11px', display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
                       <span style={{ color: '#aaccff' }}>MD{e.matchday} {e.description.slice(0, 18)}</span>
                       <span style={{ color: '#88ff88' }}>£{e.amount.toLocaleString()}</span>
                     </div>
@@ -133,34 +137,34 @@ export function Desk() {
                 </div>
                 <div style={{ flex: 1 }}>
                   {recent.filter(e => e.amount < 0).slice(0, 8).map((e, i) => (
-                    <div key={i} style={{ fontSize: '11px', display: 'flex', justifyContent: 'space-between', padding: '2px 0', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
+                    <div key={i} style={{ fontSize: '11px', display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
                       <span style={{ color: '#aaccff' }}>MD{e.matchday} {e.description.slice(0, 18)}</span>
                       <span style={{ color: '#ff8888' }}>£{Math.abs(e.amount).toLocaleString()}</span>
                     </div>
                   ))}
                 </div>
               </div>
-              <div style={{ marginTop: '12px', borderTop: '2px solid rgba(255,255,255,0.4)', paddingTop: '8px', display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
-                <span>BALANCE (MD {currentMatchday})</span>
+              <div style={{ marginTop: '14px', borderTop: '1px solid rgba(255,255,255,0.3)', paddingTop: '10px', display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+                <span style={{ color: '#aaccff' }}>BALANCE (MD {currentMatchday})</span>
                 <span style={{ color: balance >= 0 ? '#88ff88' : '#ff8888' }}>£{balance.toLocaleString()}</span>
               </div>
             </div>
           )}
 
           {tab === 'cash-week' && (
-            <div style={{ ...RAISED, background: '#0000aa', padding: '12px', color: '#ffffff' }}>
-              <div style={{ fontWeight: 'bold', marginBottom: '10px' }}>RECENT TRANSACTIONS</div>
+            <div style={{ background: '#0a0028', border: '1px solid #1a0060', borderRadius: '8px', padding: '14px', color: '#ffffff' }}>
+              <div style={{ fontWeight: 'bold', marginBottom: '12px', color: '#aaccff' }}>RECENT TRANSACTIONS</div>
               {weekEntries.length === 0 ? (
-                <div style={{ color: '#aaa', fontSize: '12px' }}>No transactions yet.</div>
+                <div style={{ color: '#64748b', fontSize: '12px' }}>No transactions yet.</div>
               ) : (
                 weekEntries.map((e, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderBottom: '1px solid rgba(255,255,255,0.2)' }}>
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
                     <span style={{ fontSize: '10px', color: '#aaccff', width: '30px' }}>MD{e.matchday}</span>
                     <span style={{ flex: 1, fontSize: '11px', color: '#e0e0ff' }}>{e.description}</span>
                     <span style={{ fontWeight: 'bold', fontSize: '12px', color: e.amount >= 0 ? '#88ff88' : '#ff8888' }}>
                       {e.amount >= 0 ? '+' : ''}£{e.amount.toLocaleString()}
                     </span>
-                    <span style={{ fontSize: '10px', color: '#aaa' }}>→£{e.running.toLocaleString()}</span>
+                    <span style={{ fontSize: '10px', color: '#7777aa' }}>→£{e.running.toLocaleString()}</span>
                   </div>
                 ))
               )}
@@ -174,16 +178,16 @@ export function Desk() {
 
 function ToggleRow({ label, sub, value, onChange }: { label: string; sub: string; value: boolean; onChange: (v: boolean) => void }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
       <div>
-        <div style={{ fontSize: '12px', fontWeight: 'bold' }}>{label}</div>
-        <div style={{ fontSize: '10px', color: '#666' }}>{sub}</div>
+        <div style={{ fontSize: '12px', fontWeight: 'bold', color: '#e2e8f0' }}>{label}</div>
+        <div style={{ fontSize: '10px', color: '#64748b' }}>{sub}</div>
       </div>
       <button onClick={() => onChange(!value)} style={{
         width: '48px', height: '24px', borderRadius: '12px', cursor: 'pointer', position: 'relative',
-        background: value ? '#006600' : '#808080', border: '2px solid #404040',
+        background: value ? '#15803d' : '#1e2535', border: `1px solid ${value ? '#16a34a' : '#28314a'}`,
       }}>
-        <div style={{ position: 'absolute', top: '2px', width: '16px', height: '16px', background: '#fff', borderRadius: '50%', transition: 'left 0.15s', left: value ? '26px' : '2px' }} />
+        <div style={{ position: 'absolute', top: '3px', width: '16px', height: '16px', background: '#fff', borderRadius: '50%', transition: 'left 0.15s', left: value ? '27px' : '3px' }} />
       </button>
     </div>
   );

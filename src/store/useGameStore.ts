@@ -49,7 +49,7 @@ export interface GameStore {
 
   // Sponsorship
   shirtSponsor: SponsorDeal | null;
-  borderSponsor: SponsorDeal | null;
+  borderSponsors: SponsorDeal[];
 
   // Stadium
   stadium: StadiumState;
@@ -144,7 +144,7 @@ export const useGameStore = create<GameStore>()(
       trainingShape: 3,
       transfersUsed: 0,
       shirtSponsor: null,
-      borderSponsor: null,
+      borderSponsors: [],
       stadium: { pitch: 1, seats: 1, facilities: 1 },
 
       startNewGame: (managerName, teamId) => {
@@ -175,14 +175,14 @@ export const useGameStore = create<GameStore>()(
           trainingShape: 3,
           transfersUsed: 0,
           shirtSponsor: null,
-          borderSponsor: null,
+          borderSponsors: [],
           stadium: { pitch: 1, seats: 1, facilities: 1 },
         });
       },
 
       playMatchday: () => {
         const s = get();
-        const { currentMatchday, fixtures, rosters, managedTeamId, formation, table, balance, financeHistory, managerName, priceLevel, foodEnabled, merchandiseEnabled, trainingSkills, trainingShape, borderSponsor, stadium } = s;
+        const { currentMatchday, fixtures, rosters, managedTeamId, formation, table, balance, financeHistory, managerName, priceLevel, foodEnabled, merchandiseEnabled, trainingSkills, trainingShape, borderSponsors, stadium } = s;
 
         const dayFixtures = fixtures.filter(f => f.matchday === currentMatchday && !f.homeGoals && f.homeGoals !== 0);
         if (dayFixtures.length === 0) return;
@@ -191,7 +191,6 @@ export const useGameStore = create<GameStore>()(
         let lastMatch: MatchReport | null = null;
         const updatedFixtures = [...fixtures];
 
-        // Training bonus: skills + shape → slight performance boost
         const trainingMod = 1 + (trainingSkills * 0.008) + (trainingShape * 0.005) + (stadium.pitch - 1) * 0.02;
 
         for (const fixture of dayFixtures) {
@@ -240,11 +239,12 @@ export const useGameStore = create<GameStore>()(
         const eventMoney = event ? event.moneyEffect : 0;
         const eventPoints = event ? event.pointsEffect : 0;
 
-        // Border sponsor payment
-        const borderPayment = borderSponsor && borderSponsor.matchdaysLeft > 0 ? borderSponsor.amount : 0;
-        const newBorderSponsor = borderSponsor
-          ? { ...borderSponsor, matchdaysLeft: borderSponsor.matchdaysLeft - 1 }
-          : null;
+        // Border sponsor payments from all active deals
+        const activeBorderSponsors = borderSponsors.filter(d => d.matchdaysLeft > 0);
+        const borderPayment = activeBorderSponsors.reduce((sum, d) => sum + d.amount, 0);
+        const newBorderSponsors = activeBorderSponsors
+          .map(d => ({ ...d, matchdaysLeft: d.matchdaysLeft - 1 }))
+          .filter(d => d.matchdaysLeft > 0);
 
         const newBalance = balance + net + eventMoney + borderPayment;
 
@@ -270,7 +270,9 @@ export const useGameStore = create<GameStore>()(
         if (borderPayment > 0) {
           entries.push({
             matchday: currentMatchday,
-            description: `Border sponsorship: ${borderSponsor!.name}`,
+            description: activeBorderSponsors.length === 1
+              ? `Border: ${activeBorderSponsors[0].name}`
+              : `Border deals (${activeBorderSponsors.length})`,
             amount: borderPayment,
             running: newBalance,
           });
@@ -295,7 +297,7 @@ export const useGameStore = create<GameStore>()(
           rosters: newRosters,
           phase: 'result',
           transfersUsed: 0,
-          borderSponsor: newBorderSponsor,
+          borderSponsors: newBorderSponsors,
         });
       },
 
@@ -344,7 +346,10 @@ export const useGameStore = create<GameStore>()(
       },
 
       acceptBorderDeal: (deal) => {
-        set({ borderSponsor: deal });
+        const { borderSponsors } = get();
+        if (borderSponsors.length >= 3) return;
+        const cappedDeal = { ...deal, matchdays: Math.min(8, deal.matchdays), matchdaysLeft: Math.min(8, deal.matchdaysLeft) };
+        set({ borderSponsors: [...borderSponsors, cappedDeal] });
       },
 
       hirePlayer: (player) => {

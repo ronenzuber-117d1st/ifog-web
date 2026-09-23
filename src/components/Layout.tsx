@@ -1,4 +1,4 @@
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/useGameStore';
 import { img } from '../utils/images';
 
@@ -14,14 +14,20 @@ const NAV = [
 ];
 
 export function Layout({ children }: Props) {
-  const { managedTeamId, currentMatchday, totalMatchdays, balance, table } = useGameStore();
+  const navigate = useNavigate();
+  const { managedTeamId, currentMatchday, totalMatchdays, balance, table, resetGame } = useGameStore();
   const location = useLocation();
   const pos = table.findIndex(r => r.teamId === managedTeamId) + 1;
 
-  return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#c0c0c0', fontFamily: 'Arial, system-ui, sans-serif' }}>
+  const handleExit = () => {
+    resetGame();
+    navigate('/');
+  };
 
-      {/* Windows title bar */}
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#0d1117', fontFamily: 'Arial, system-ui, sans-serif' }}>
+
+      {/* Title bar */}
       <header style={{
         background: '#000080',
         color: '#ffffff',
@@ -57,8 +63,8 @@ export function Layout({ children }: Props) {
         <nav style={{
           width: '88px',
           flexShrink: 0,
-          background: '#c0c0c0',
-          borderLeft: '2px solid #808080',
+          background: '#0d1117',
+          borderLeft: '1px solid #1e2535',
           display: 'flex',
           flexDirection: 'column',
           padding: '6px 4px',
@@ -77,18 +83,17 @@ export function Layout({ children }: Props) {
                   justifyContent: 'center',
                   padding: '8px 4px',
                   minHeight: '44px',
-                  background: active ? '#a8a8a8' : '#c0c0c0',
-                  border: '2px solid',
-                  borderColor: active
-                    ? '#808080 #ffffff #ffffff #808080'
-                    : '#ffffff #808080 #808080 #ffffff',
+                  background: active ? '#161b27' : 'transparent',
+                  border: '1px solid',
+                  borderColor: active ? '#2d3a52' : 'transparent',
+                  borderRadius: '6px',
                   textDecoration: 'none',
                   cursor: 'pointer',
                 }}
               >
                 {lines.map((line, i) => (
                   <span key={i} style={{
-                    color: active ? '#222222' : color,
+                    color: active ? '#ffffff' : color,
                     fontWeight: 'bold',
                     fontSize: '10px',
                     lineHeight: '1.4',
@@ -113,6 +118,25 @@ export function Layout({ children }: Props) {
               alt=""
             />
           </div>
+
+          {/* Exit button */}
+          <button
+            onClick={handleExit}
+            style={{
+              background: '#1a0a0a',
+              border: '1px solid #4a1a1a',
+              color: '#f87171',
+              padding: '6px 4px',
+              cursor: 'pointer',
+              borderRadius: '4px',
+              fontSize: '10px',
+              fontWeight: 'bold',
+              width: '100%',
+              marginTop: '4px',
+            }}
+          >
+            EXIT GAME
+          </button>
         </nav>
       </div>
     </div>

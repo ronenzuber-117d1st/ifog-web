@@ -7,9 +7,6 @@ import type { SponsorDeal } from '../store/useGameStore';
 
 type Tab = 'shirt' | 'borders' | 'transfer';
 
-const RAISED = { border: '2px solid', borderColor: '#ffffff #808080 #808080 #ffffff' } as const;
-const SUNKEN = { border: '2px solid', borderColor: '#808080 #ffffff #ffffff #808080' } as const;
-
 const SHIRT_COMPANIES = ['SportoMax','PowerFit','ChampGear','VeloSport','TurboKit','GoalPro','KickKing','StrikerFuel','PitchMaster','FanZone'];
 const BORDER_COMPANIES = ['SportsBet Pro','FootballHub','GoalZone','BallMaster','MatchFinder','CrownSport','TurfKing'];
 
@@ -30,7 +27,7 @@ function generateShirtOffer(matchday: number, teamId: number): SponsorDeal {
 
 function generateBorderOffer(matchday: number, teamId: number): SponsorDeal {
   const rng = lcg(matchday * 2673 + teamId * 13);
-  const md = Math.floor(rng() * 10) + 5;
+  const md = Math.floor(rng() * 5) + 4; // 4-8 matchdays max
   return {
     name: BORDER_COMPANIES[Math.floor(rng() * BORDER_COMPANIES.length)],
     amount: Math.round((rng() * 55_000 + 15_000) / 5_000) * 5_000,
@@ -52,8 +49,8 @@ function generateHirePlayers(matchday: number, teamId: number): Player[] {
   return positions.map((pos, i) => {
     const names = HIRE_NAMES[pos];
     const name = names[Math.floor(rng() * names.length)] + ' ' + String.fromCharCode(65 + Math.floor(rng() * 26)) + '.';
-    const skill = Math.floor(rng() * 4) + 4; // 4-7
-    const age = Math.floor(rng() * 12) + 20; // 20-31
+    const skill = Math.floor(rng() * 4) + 4;
+    const age = Math.floor(rng() * 12) + 20;
     return {
       id: `hire-${matchday}-${i}`,
       name,
@@ -69,8 +66,10 @@ function generateHirePlayers(matchday: number, teamId: number): Player[] {
 
 const POS_LABEL: Record<string, string> = { T: 'GK', V: 'DEF', M: 'MID', S: 'FWD' };
 
+const CARD = { background: '#161b27', border: '1px solid #28314a', borderRadius: '8px' } as const;
+
 export function Finances() {
-  const { managedTeamId, currentMatchday, balance, shirtSponsor, borderSponsor, rosters, transfersUsed, acceptShirtSponsor, acceptBorderDeal, hirePlayer, sellPlayer } = useGameStore();
+  const { managedTeamId, currentMatchday, balance, shirtSponsor, borderSponsors, rosters, transfersUsed, acceptShirtSponsor, acceptBorderDeal, hirePlayer, sellPlayer } = useGameStore();
   const [tab, setTab] = useState<Tab>('shirt');
 
   const shirtOffer = useMemo(() => generateShirtOffer(currentMatchday, managedTeamId), [currentMatchday, managedTeamId]);
@@ -79,26 +78,30 @@ export function Finances() {
 
   const myPlayers = rosters[managedTeamId] ?? [];
   const transfersLeft = 3 - transfersUsed;
+  const canAcceptBorder = borderSponsors.length < 3;
 
   return (
     <Layout>
-      <div style={{ background: '#c0c0c0', minHeight: 'calc(100vh - 28px)', fontFamily: 'Arial, system-ui', fontSize: '13px' }}>
+      <div style={{ background: '#0d1117', minHeight: 'calc(100vh - 28px)', fontFamily: 'Arial, system-ui', fontSize: '13px' }}>
 
         {/* Tabs */}
-        <div style={{ display: 'flex', paddingTop: '4px', paddingLeft: '4px', borderBottom: '2px solid #808080', background: '#c0c0c0' }}>
+        <div style={{ display: 'flex', padding: '10px 10px 0', gap: '4px', borderBottom: '1px solid #1e2535' }}>
           {(['shirt', 'borders', 'transfer'] as Tab[]).map(t => {
-            const labels = { shirt: 'Shirt', borders: 'Borders', transfer: 'Transfer' };
+            const labels = { shirt: 'Shirt', borders: `Borders${borderSponsors.length > 0 ? ` (${borderSponsors.length})` : ''}`, transfer: 'Transfer' };
             const active = tab === t;
             return (
               <button key={t} onClick={() => setTab(t)} style={{
-                padding: '3px 20px', fontSize: '12px',
+                padding: '6px 20px', fontSize: '12px',
                 fontWeight: active ? 'bold' : 'normal',
-                background: '#c0c0c0', cursor: 'pointer',
-                border: '2px solid',
-                borderColor: '#ffffff #808080 ' + (active ? '#c0c0c0' : '#808080') + ' #ffffff',
-                borderBottom: active ? '2px solid #c0c0c0' : undefined,
-                marginRight: '3px', marginBottom: active ? '-2px' : '0',
-                position: 'relative', zIndex: active ? 1 : 0, color: '#000',
+                background: active ? '#161b27' : 'transparent',
+                cursor: 'pointer',
+                border: '1px solid',
+                borderColor: active ? '#28314a' : 'transparent',
+                borderBottom: active ? '1px solid #161b27' : '1px solid transparent',
+                borderRadius: '6px 6px 0 0',
+                marginBottom: active ? '-1px' : '0',
+                position: 'relative', zIndex: active ? 1 : 0,
+                color: active ? '#ffffff' : '#64748b',
               }}>
                 {labels[t]}
               </button>
@@ -117,8 +120,9 @@ export function Finances() {
           )}
           {tab === 'borders' && (
             <BordersTab
-              borderSponsor={borderSponsor}
+              borderSponsors={borderSponsors}
               borderOffer={borderOffer}
+              canAccept={canAcceptBorder}
               onAccept={() => acceptBorderDeal({ ...borderOffer, matchdaysLeft: borderOffer.matchdays })}
             />
           )}
@@ -141,10 +145,15 @@ export function Finances() {
 function YeahButton({ onClick, disabled }: { onClick: () => void; disabled?: boolean }) {
   return (
     <button onClick={onClick} disabled={disabled} style={{
-      ...RAISED, background: '#c0c0c0', padding: '8px 16px', cursor: disabled ? 'default' : 'pointer',
-      fontSize: '13px', fontWeight: 'bold', color: disabled ? '#888' : '#000', display: 'flex', alignItems: 'center', gap: '6px',
+      background: disabled ? '#1a2a1a' : '#15803d',
+      border: '1px solid',
+      borderColor: disabled ? '#2a3a2a' : '#16a34a',
+      borderRadius: '6px',
+      color: disabled ? '#4a6a4a' : '#ffffff',
+      padding: '8px 16px', cursor: disabled ? 'default' : 'pointer',
+      fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px',
     }}>
-      <span style={{ color: '#0000cc', fontSize: '16px' }}>✓</span> Yeahh!!!
+      <span style={{ fontSize: '16px' }}>✓</span> Yeahh!!!
     </button>
   );
 }
@@ -152,10 +161,14 @@ function YeahButton({ onClick, disabled }: { onClick: () => void; disabled?: boo
 function ForgetButton({ onClick }: { onClick: () => void }) {
   return (
     <button onClick={onClick} style={{
-      ...RAISED, background: '#c0c0c0', padding: '8px 16px', cursor: 'pointer',
+      background: '#1a0a0a',
+      border: '1px solid #4a1a1a',
+      borderRadius: '6px',
+      color: '#f87171',
+      padding: '8px 16px', cursor: 'pointer',
       fontSize: '13px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '6px',
     }}>
-      <span style={{ color: '#cc0000', fontSize: '16px' }}>✗</span> Forget It!
+      <span style={{ fontSize: '16px' }}>✗</span> Forget It!
     </button>
   );
 }
@@ -170,46 +183,52 @@ function ShirtTab({ shirtSponsor, shirtOffer, onAccept, balance: _balance }: {
   const alreadyHave = !!shirtSponsor;
 
   return (
-    <div style={{ display: 'flex', gap: '10px' }}>
+    <div style={{ display: 'flex', gap: '12px' }}>
       {/* Left panel */}
-      <div style={{ width: '200px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      <div style={{ width: '220px', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: '8px' }}>
         {!alreadyHave && !declined && (
-          <>
+          <div style={{ display: 'flex', gap: '8px' }}>
             <YeahButton onClick={onAccept} />
             <ForgetButton onClick={() => setDeclined(true)} />
-          </>
+          </div>
         )}
-        <div style={{ ...RAISED, background: '#c0c0c0', padding: '12px', marginTop: '6px', fontSize: '12px', textAlign: 'center' }}>
+        <div style={{ ...CARD, padding: '14px', fontSize: '13px', textAlign: 'center' }}>
           {shirtSponsor ? (
             <>
-              <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>MAIN SPONSOR</div>
-              <div style={{ color: '#0000aa', fontWeight: 'bold', fontSize: '14px', marginBottom: '6px' }}>{shirtSponsor.name}</div>
-              <div>offers</div>
-              <div style={{ fontWeight: 'bold', fontSize: '16px' }}>£{shirtSponsor.amount.toLocaleString()}</div>
-              <div style={{ color: '#444', fontSize: '11px', marginTop: '4px' }}>until end of season</div>
+              <div style={{ color: '#94a3b8', fontSize: '10px', marginBottom: '8px' }}>MAIN SPONSOR</div>
+              <div style={{ color: '#60a5fa', fontWeight: 'bold', fontSize: '16px', marginBottom: '8px' }}>{shirtSponsor.name}</div>
+              <div style={{ color: '#64748b', fontSize: '11px' }}>pays</div>
+              <div style={{ color: '#4ade80', fontWeight: 'bold', fontSize: '22px', margin: '4px 0' }}>£{shirtSponsor.amount.toLocaleString()}</div>
+              <div style={{ color: '#64748b', fontSize: '11px' }}>until end of season</div>
             </>
           ) : declined ? (
-            <div style={{ color: '#888' }}>No shirt sponsor<br />this season</div>
+            <div style={{ color: '#64748b' }}>No shirt sponsor<br />this season</div>
           ) : (
             <>
-              <div style={{ fontWeight: 'bold', marginBottom: '4px' }}>NEW OFFER</div>
-              <div style={{ color: '#0000aa', fontWeight: 'bold', fontSize: '14px', marginBottom: '6px' }}>{shirtOffer.name}</div>
-              <div>offers</div>
-              <div style={{ fontWeight: 'bold', fontSize: '16px' }}>£{shirtOffer.amount.toLocaleString()}</div>
-              <div style={{ color: '#444', fontSize: '11px', marginTop: '4px' }}>for the season</div>
+              <div style={{ color: '#94a3b8', fontSize: '10px', marginBottom: '8px' }}>NEW OFFER</div>
+              <div style={{ color: '#60a5fa', fontWeight: 'bold', fontSize: '16px', marginBottom: '8px' }}>{shirtOffer.name}</div>
+              <div style={{ color: '#64748b', fontSize: '11px' }}>offers</div>
+              <div style={{ color: '#4ade80', fontWeight: 'bold', fontSize: '22px', margin: '4px 0' }}>£{shirtOffer.amount.toLocaleString()}</div>
+              <div style={{ color: '#64748b', fontSize: '11px' }}>for the season</div>
             </>
           )}
         </div>
       </div>
 
       {/* Right: player wearing shirt */}
-      <div style={{ flex: 1, ...SUNKEN, background: '#808080', overflow: 'hidden', minHeight: '300px', position: 'relative' }}>
-        <img src={img('superm2.png')} style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} alt="" />
+      <div style={{ flex: 1, ...CARD, overflow: 'hidden', minHeight: '300px', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <img
+          src={img('player-shirt.png')}
+          onError={(e) => { (e.target as HTMLImageElement).src = img('superm2.png'); }}
+          style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
+          alt=""
+        />
         {shirtSponsor && (
           <div style={{
             position: 'absolute', top: '35%', left: '50%', transform: 'translate(-50%, -50%)',
-            background: 'rgba(0,0,0,0.75)', color: '#fff', padding: '4px 10px',
-            fontSize: '11px', fontWeight: 'bold', textAlign: 'center', border: '1px solid #fff',
+            background: 'rgba(0,0,128,0.85)', color: '#fff', padding: '6px 14px',
+            fontSize: '13px', fontWeight: 'bold', textAlign: 'center',
+            border: '1px solid #3b82f6', borderRadius: '4px',
           }}>
             {shirtSponsor.name}
           </div>
@@ -219,64 +238,83 @@ function ShirtTab({ shirtSponsor, shirtOffer, onAccept, balance: _balance }: {
   );
 }
 
-function BordersTab({ borderSponsor, borderOffer, onAccept }: {
-  borderSponsor: SponsorDeal | null;
+function BordersTab({ borderSponsors, borderOffer, canAccept, onAccept }: {
+  borderSponsors: SponsorDeal[];
   borderOffer: SponsorDeal;
+  canAccept: boolean;
   onAccept: () => void;
 }) {
   const [declined, setDeclined] = useState(false);
-  const alreadyHave = !!borderSponsor && borderSponsor.matchdaysLeft > 0;
 
   return (
-    <div style={{ display: 'flex', gap: '10px', flexDirection: 'column' }}>
+    <div style={{ display: 'flex', gap: '12px', flexDirection: 'column' }}>
       {/* Banner */}
-      <div style={{ ...SUNKEN, background: '#000', overflow: 'hidden', height: '100px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {borderSponsor && borderSponsor.matchdaysLeft > 0 ? (
-          <div style={{ color: '#cc0000', fontSize: '40px', fontWeight: '900', letterSpacing: '4px', textShadow: '3px 3px 6px rgba(0,0,0,0.8)', fontFamily: 'Impact, Arial Black' }}>
-            {borderSponsor.name}
+      <div style={{ ...CARD, overflow: 'hidden', height: '90px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a0010' }}>
+        {borderSponsors.length > 0 ? (
+          <div style={{ display: 'flex', gap: '24px', alignItems: 'center' }}>
+            {borderSponsors.map((d, i) => (
+              <div key={i} style={{ color: '#cc0000', fontSize: Math.max(20, 36 - borderSponsors.length * 4) + 'px', fontWeight: '900', letterSpacing: '3px', textShadow: '3px 3px 6px rgba(0,0,0,0.8)', fontFamily: 'Impact, Arial Black' }}>
+                {d.name}
+              </div>
+            ))}
           </div>
         ) : (
-          <div style={{ color: '#ff4400', fontSize: '36px', fontWeight: '900', letterSpacing: '4px', textShadow: '3px 3px 6px rgba(0,0,0,0.8)', fontFamily: 'Impact, Arial Black' }}>
+          <div style={{ color: '#ff4400', fontSize: '36px', fontWeight: '900', letterSpacing: '4px', textShadow: '3px 3px 6px rgba(0,0,0,0.8)', fontFamily: 'Impact, Arial Black', opacity: 0.5 }}>
             {borderOffer.name}
           </div>
         )}
       </div>
 
-      {/* Ad strips */}
-      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-        {['SportoBet', 'ChampTracker', 'GoalAlert', 'KickStats'].map(s => (
-          <div key={s} style={{ background: '#cc0000', color: '#ffffff', padding: '3px 8px', fontSize: '10px', fontWeight: 'bold' }}>{s}</div>
-        ))}
-      </div>
+      {/* Active deals */}
+      {borderSponsors.length > 0 && (
+        <div>
+          <div style={{ color: '#94a3b8', fontSize: '10px', marginBottom: '8px' }}>ACTIVE DEALS ({borderSponsors.length}/3)</div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {borderSponsors.map((d, i) => (
+              <div key={i} style={{ ...CARD, padding: '12px 16px', minWidth: '160px', textAlign: 'center' }}>
+                <div style={{ color: '#60a5fa', fontWeight: 'bold', fontSize: '14px', marginBottom: '4px' }}>{d.name}</div>
+                <div style={{ color: '#4ade80', fontWeight: 'bold', fontSize: '18px' }}>£{d.amount.toLocaleString()}<span style={{ fontSize: '11px', color: '#64748b', fontWeight: 'normal' }}>/match</span></div>
+                <div style={{ color: '#94a3b8', fontSize: '11px', marginTop: '4px' }}>{d.matchdaysLeft} matchday{d.matchdaysLeft !== 1 ? 's' : ''} left</div>
+                <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', marginTop: '6px' }}>
+                  {Array.from({ length: d.matchdays }).map((_, j) => (
+                    <div key={j} style={{ width: '8px', height: '4px', borderRadius: '2px', background: j < d.matchdaysLeft ? '#3b82f6' : '#1e2535' }} />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-      {/* Offer panel */}
-      <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-        <div style={{ ...RAISED, background: '#c0c0c0', padding: '16px', minWidth: '180px', textAlign: 'center' }}>
-          {alreadyHave ? (
-            <>
-              <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '8px' }}>ACTIVE DEAL</div>
-              <div style={{ color: '#0000aa', fontWeight: 'bold' }}>{borderSponsor!.name}</div>
-              <div style={{ fontSize: '12px', margin: '8px 0' }}>{borderSponsor!.matchdaysLeft} matchdays left</div>
-              <div style={{ fontWeight: 'bold', fontSize: '18px' }}>£{borderSponsor!.amount.toLocaleString()}<span style={{ fontSize: '11px', fontWeight: 'normal' }}>/match</span></div>
-            </>
-          ) : declined ? (
-            <div style={{ color: '#888', fontSize: '12px' }}>No border deal<br />at the moment</div>
-          ) : (
-            <>
-              <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '8px' }}>BORDER</div>
-              <div style={{ fontSize: '12px', marginBottom: '6px' }}>Offer for<br /><strong>{borderOffer.matchdays} Matchdays</strong></div>
-              <div style={{ fontWeight: 'bold', fontSize: '20px' }}>£{borderOffer.amount.toLocaleString()}</div>
-              <div style={{ fontSize: '10px', color: '#444', marginBottom: '10px' }}>per matchday</div>
-              <div style={{ display: 'flex', gap: '6px', justifyContent: 'center' }}>
+      {/* New offer */}
+      <div>
+        <div style={{ color: '#94a3b8', fontSize: '10px', marginBottom: '8px' }}>
+          {canAccept ? 'NEW OFFER' : 'MAX DEALS REACHED (3/3)'}
+        </div>
+        {!declined && canAccept ? (
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+            <div style={{ ...CARD, padding: '16px', minWidth: '200px', textAlign: 'center' }}>
+              <div style={{ color: '#94a3b8', fontSize: '10px', marginBottom: '8px' }}>BORDER DEAL</div>
+              <div style={{ color: '#60a5fa', fontWeight: 'bold', fontSize: '15px', marginBottom: '8px' }}>{borderOffer.name}</div>
+              <div style={{ color: '#64748b', fontSize: '12px', marginBottom: '4px' }}>for <strong style={{ color: '#ffffff' }}>{borderOffer.matchdays} matchdays</strong></div>
+              <div style={{ color: '#4ade80', fontWeight: 'bold', fontSize: '22px', margin: '6px 0' }}>£{borderOffer.amount.toLocaleString()}</div>
+              <div style={{ color: '#64748b', fontSize: '10px', marginBottom: '14px' }}>per matchday</div>
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'center' }}>
                 <YeahButton onClick={onAccept} />
                 <ForgetButton onClick={() => setDeclined(true)} />
               </div>
-            </>
-          )}
-        </div>
-        <div style={{ ...SUNKEN, background: '#808080', flex: 1, minHeight: '140px', overflow: 'hidden' }}>
-          <img src={img('zuschau1.png')} style={{ width: '100%', height: '100%', objectFit: 'cover', imageRendering: 'pixelated' }} alt="" />
-        </div>
+            </div>
+            <div style={{ ...CARD, flex: 1, minHeight: '140px', overflow: 'hidden' }}>
+              <img src={img('zuschau1.png')} style={{ width: '100%', height: '100%', objectFit: 'cover', imageRendering: 'pixelated' }} alt="" />
+            </div>
+          </div>
+        ) : declined ? (
+          <div style={{ ...CARD, padding: '16px', color: '#64748b', fontSize: '12px' }}>No new border deal accepted this matchday.</div>
+        ) : (
+          <div style={{ ...CARD, padding: '16px', color: '#64748b', fontSize: '12px' }}>
+            You already have 3 active border deals. Wait for one to expire before adding more.
+          </div>
+        )}
       </div>
     </div>
   );
@@ -299,18 +337,22 @@ function TransferTab({ hirePlayers, myPlayers, balance, transfersLeft, onHire, o
 
   return (
     <div>
-      <div style={{ background: '#808080', color: '#fff', textAlign: 'center', padding: '4px', fontSize: '12px', fontWeight: 'bold', marginBottom: '8px' }}>
-        PLAYER — TRANSFER &nbsp;|&nbsp; Transfers remaining: {transfersLeft}/3
+      <div style={{ ...CARD, textAlign: 'center', padding: '8px', fontSize: '12px', marginBottom: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px' }}>
+        <span style={{ color: '#94a3b8' }}>PLAYER TRANSFER</span>
+        <span style={{ color: transfersLeft > 0 ? '#4ade80' : '#f87171', fontWeight: 'bold' }}>
+          {transfersLeft}/3 transfers remaining
+        </span>
       </div>
 
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
         {/* Player Hire panel */}
-        <div style={{ flex: 1, ...SUNKEN, background: '#1a1a40', position: 'relative', overflow: 'hidden', minHeight: '180px', cursor: 'pointer' }}
+        <div
+          style={{ flex: 1, borderRadius: '8px', background: '#1a1a40', position: 'relative', overflow: 'hidden', minHeight: '180px', cursor: 'pointer', border: `2px solid ${mode === 'hire' ? '#3b82f6' : '#1e2535'}` }}
           onClick={() => setMode('hire')}>
           <img src={img('pommes1.png')} style={{ width: '100%', height: '100%', objectFit: 'cover', imageRendering: 'pixelated' }} alt="" />
           <div style={{
             position: 'absolute', bottom: '12px', left: '50%', transform: 'translateX(-50%)',
-            color: mode === 'hire' ? '#ffff00' : '#ffffff', fontWeight: 'bold', fontSize: '18px',
+            color: mode === 'hire' ? '#60a5fa' : '#ffffff', fontWeight: 'bold', fontSize: '18px',
             textShadow: '2px 2px 4px #000', textAlign: 'center',
           }}>
             Player<br />Hire
@@ -318,17 +360,18 @@ function TransferTab({ hirePlayers, myPlayers, balance, transfersLeft, onHire, o
         </div>
 
         {/* Centre pitch thumbnail */}
-        <div style={{ width: '80px', ...SUNKEN, overflow: 'hidden' }}>
+        <div style={{ width: '80px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #1e2535' }}>
           <img src={img('felda1.png')} style={{ width: '100%', height: '100%', objectFit: 'cover', imageRendering: 'pixelated' }} alt="" />
         </div>
 
         {/* Player Sell panel */}
-        <div style={{ flex: 1, ...SUNKEN, background: '#401a1a', position: 'relative', overflow: 'hidden', minHeight: '180px', cursor: 'pointer' }}
+        <div
+          style={{ flex: 1, borderRadius: '8px', background: '#401a1a', position: 'relative', overflow: 'hidden', minHeight: '180px', cursor: 'pointer', border: `2px solid ${mode === 'sell' ? '#ef4444' : '#1e2535'}` }}
           onClick={() => setMode('sell')}>
           <img src={img('verkauf.png')} style={{ width: '100%', height: '100%', objectFit: 'cover', imageRendering: 'pixelated' }} alt="" />
           <div style={{
             position: 'absolute', bottom: '12px', left: '50%', transform: 'translateX(-50%)',
-            color: mode === 'sell' ? '#ffff00' : '#ffffff', fontWeight: 'bold', fontSize: '18px',
+            color: mode === 'sell' ? '#f87171' : '#ffffff', fontWeight: 'bold', fontSize: '18px',
             textShadow: '2px 2px 4px #000', textAlign: 'center',
           }}>
             Player<br />Sell
@@ -338,8 +381,8 @@ function TransferTab({ hirePlayers, myPlayers, balance, transfersLeft, onHire, o
 
       {/* Player lists */}
       {mode === 'hire' && (
-        <div style={{ ...RAISED, background: '#c0c0c0', padding: '8px' }}>
-          <div style={{ fontSize: '11px', color: '#444', marginBottom: '6px' }}>Available players — click to hire (max 3 transfers per matchday)</div>
+        <div style={{ ...CARD, padding: '10px' }}>
+          <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '8px' }}>Available players — max 3 transfers per matchday</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
             {hirePlayers.map(p => {
               const cost = hireCost(p);
@@ -348,23 +391,23 @@ function TransferTab({ hirePlayers, myPlayers, balance, transfersLeft, onHire, o
               return (
                 <div key={p.id} style={{
                   display: 'flex', alignItems: 'center', gap: '8px',
-                  background: selected ? '#000080' : '#d4d0c8',
-                  color: selected ? '#fff' : '#000',
-                  padding: '5px 8px', cursor: 'pointer',
-                  border: '1px solid #808080',
+                  background: selected ? '#1e3a5f' : '#0d1117',
+                  padding: '6px 10px', cursor: 'pointer',
+                  border: `1px solid ${selected ? '#3b82f6' : '#1e2535'}`,
+                  borderRadius: '6px',
                   opacity: !canAfford || transfersLeft <= 0 ? 0.5 : 1,
                 }} onClick={() => setSelectedHire(selected ? null : p)}>
-                  <span style={{ fontWeight: 'bold', fontSize: '10px', width: '28px', color: selected ? '#88ccff' : '#0000aa' }}>{POS_LABEL[p.position]}</span>
-                  <span style={{ flex: 1, fontSize: '12px' }}>{p.name}</span>
-                  <span style={{ fontSize: '10px', color: selected ? '#aaa' : '#444' }}>Age {p.age}</span>
-                  <span style={{ fontSize: '11px', fontWeight: 'bold' }}>Skill {p.skill}</span>
-                  <span style={{ fontSize: '11px', fontWeight: 'bold', color: canAfford ? (selected ? '#88ff88' : '#006600') : '#cc0000' }}>£{(cost / 1000).toFixed(0)}K</span>
+                  <span style={{ fontWeight: 'bold', fontSize: '10px', width: '28px', color: '#60a5fa' }}>{POS_LABEL[p.position]}</span>
+                  <span style={{ flex: 1, fontSize: '12px', color: '#e2e8f0' }}>{p.name}</span>
+                  <span style={{ fontSize: '10px', color: '#94a3b8' }}>Age {p.age}</span>
+                  <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#e2e8f0' }}>Skill {p.skill}</span>
+                  <span style={{ fontSize: '11px', fontWeight: 'bold', color: canAfford ? '#4ade80' : '#f87171' }}>£{(cost / 1000).toFixed(0)}K</span>
                 </div>
               );
             })}
           </div>
           {selectedHire && (
-            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
               <YeahButton onClick={() => { onHire(selectedHire); setSelectedHire(null); }} disabled={balance < hireCost(selectedHire) || transfersLeft <= 0} />
               <ForgetButton onClick={() => setSelectedHire(null)} />
             </div>
@@ -373,8 +416,8 @@ function TransferTab({ hirePlayers, myPlayers, balance, transfersLeft, onHire, o
       )}
 
       {mode === 'sell' && (
-        <div style={{ ...RAISED, background: '#c0c0c0', padding: '8px' }}>
-          <div style={{ fontSize: '11px', color: '#444', marginBottom: '6px' }}>Your squad — select a player to sell</div>
+        <div style={{ ...CARD, padding: '10px' }}>
+          <div style={{ fontSize: '11px', color: '#64748b', marginBottom: '8px' }}>Your squad — select a player to sell</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxHeight: '200px', overflowY: 'auto' }}>
             {myPlayers.map(p => {
               const price = sellPrice(p);
@@ -382,21 +425,21 @@ function TransferTab({ hirePlayers, myPlayers, balance, transfersLeft, onHire, o
               return (
                 <div key={p.id} style={{
                   display: 'flex', alignItems: 'center', gap: '8px',
-                  background: selected ? '#000080' : '#d4d0c8',
-                  color: selected ? '#fff' : '#000',
-                  padding: '5px 8px', cursor: 'pointer',
-                  border: '1px solid #808080',
+                  background: selected ? '#1e3a5f' : '#0d1117',
+                  padding: '6px 10px', cursor: 'pointer',
+                  border: `1px solid ${selected ? '#3b82f6' : '#1e2535'}`,
+                  borderRadius: '6px',
                 }} onClick={() => setSelectedSell(selected ? null : p.id)}>
-                  <span style={{ fontWeight: 'bold', fontSize: '10px', width: '28px', color: selected ? '#88ccff' : '#0000aa' }}>{POS_LABEL[p.position]}</span>
-                  <span style={{ flex: 1, fontSize: '12px' }}>{p.name}</span>
-                  <span style={{ fontSize: '10px', color: selected ? '#aaa' : '#444' }}>Skill {p.skill}</span>
-                  <span style={{ fontSize: '11px', fontWeight: 'bold', color: selected ? '#88ff88' : '#006600' }}>£{(price / 1000).toFixed(0)}K</span>
+                  <span style={{ fontWeight: 'bold', fontSize: '10px', width: '28px', color: '#60a5fa' }}>{POS_LABEL[p.position]}</span>
+                  <span style={{ flex: 1, fontSize: '12px', color: '#e2e8f0' }}>{p.name}</span>
+                  <span style={{ fontSize: '10px', color: '#94a3b8' }}>Skill {p.skill}</span>
+                  <span style={{ fontSize: '11px', fontWeight: 'bold', color: '#4ade80' }}>£{(price / 1000).toFixed(0)}K</span>
                 </div>
               );
             })}
           </div>
           {selectedSell && (
-            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
               <YeahButton onClick={() => { onSell(selectedSell); setSelectedSell(null); }} disabled={transfersLeft <= 0} />
               <ForgetButton onClick={() => setSelectedSell(null)} />
             </div>
