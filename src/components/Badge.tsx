@@ -1,4 +1,5 @@
 import type { Team } from '../types/game';
+import { img } from '../utils/images';
 
 interface Props {
   team: Team;
@@ -13,7 +14,7 @@ const sizes = {
 };
 
 export function Badge({ team, size = 'md' }: Props) {
-  const src = `/images/wappen${String(team.id).padStart(2, '0')}.png`;
+  const src = img(`wappen${String(team.id).padStart(2, '0')}.png`);
   const initials = team.name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase();
 
   return (

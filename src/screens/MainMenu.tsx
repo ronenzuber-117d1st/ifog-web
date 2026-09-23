@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/useGameStore';
+import { img } from '../utils/images';
 
 export function MainMenu() {
   const navigate = useNavigate();
@@ -11,7 +12,7 @@ export function MainMenu() {
       {/* Stadium background */}
       <div className="absolute inset-0">
         <img
-          src="/images/zuschau.png"
+          src={img('zuschau.png')}
           alt=""
           className="w-full h-full object-cover"
           style={{ imageRendering: 'pixelated' }}
@@ -21,13 +22,13 @@ export function MainMenu() {
 
       {/* Fans strip at bottom */}
       <div className="absolute bottom-0 left-0 right-0 h-32 overflow-hidden opacity-40">
-        <img src="/images/fans.png" alt="" className="w-full object-cover" style={{ imageRendering: 'pixelated' }} />
+        <img src={img('fans.png')} alt="" className="w-full object-cover" style={{ imageRendering: 'pixelated' }} />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
       </div>
 
       <div className="relative z-10 flex flex-col items-center text-center max-w-lg px-4">
         <div className="mb-4 opacity-90">
-          <img src="/images/ball.png" alt="ball" className="w-16 h-16 mx-auto" style={{ imageRendering: 'pixelated' }} />
+          <img src={img('ball.png')} alt="ball" className="w-16 h-16 mx-auto" style={{ imageRendering: 'pixelated' }} />
         </div>
 
         <h1 className="text-5xl sm:text-6xl font-extrabold text-white tracking-tight leading-tight drop-shadow-2xl">

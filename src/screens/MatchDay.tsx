@@ -4,6 +4,7 @@ import { LEAGUE_TEAMS } from '../data/teams';
 import { Badge } from '../components/Badge';
 import { Layout } from '../components/Layout';
 import type { Formation } from '../types/game';
+import { img } from '../utils/images';
 
 const FORMATIONS: Formation[] = ['4-4-2', '4-3-3', '3-5-2', '5-3-2', '4-5-1'];
 const FORMATION_DESC: Record<Formation, string> = {
@@ -62,7 +63,7 @@ export function MatchDay() {
           {/* Stadium background */}
           <div className="relative h-36 overflow-hidden">
             <img
-              src="/images/zuschau1.png"
+              src={img('zuschau1.png')}
               alt="stadium"
               className="w-full h-full object-cover"
               style={{ imageRendering: 'pixelated' }}
@@ -76,7 +77,7 @@ export function MatchDay() {
           {/* Pitch */}
           <div className="relative">
             <img
-              src="/images/feld1.png"
+              src={img('feld1.png')}
               alt="pitch"
               className="w-full object-cover"
               style={{ imageRendering: 'pixelated', maxHeight: '160px' }}
@@ -91,7 +92,7 @@ export function MatchDay() {
 
               {/* Scoreboard */}
               <div className="flex flex-col items-center">
-                <img src="/images/anzeig1.png" alt="scoreboard" className="w-28 opacity-90" style={{ imageRendering: 'pixelated' }} />
+                <img src={img('anzeig1.png')} alt="scoreboard" className="w-28 opacity-90" style={{ imageRendering: 'pixelated' }} />
                 <span className="text-white font-extrabold text-2xl tracking-widest mt-1 drop-shadow">? - ?</span>
               </div>
 
