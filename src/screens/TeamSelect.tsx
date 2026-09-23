@@ -35,7 +35,7 @@ export function TeamSelect() {
             <h2 className="text-2xl font-bold text-white mb-1">Choose Your Club</h2>
             <p className="text-slate-400 mb-6">Select the team you'll manage this season.</p>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {LEAGUE_TEAMS.map(team => {
                 const selected = team.id === selectedTeamId;
                 return (
@@ -51,8 +51,8 @@ export function TeamSelect() {
                       <div className={`font-semibold text-sm ${selected ? 'text-pitch-400' : 'text-white'}`}>
                         {team.name}
                       </div>
-                      <div className="text-xs text-slate-500">{team.managerName}</div>
-                      <div className="mt-1 flex items-center justify-center gap-1">
+                      <div className="text-xs text-slate-500 mt-0.5">{team.managerName}</div>
+                      <div className="mt-1.5 flex items-center justify-center gap-1">
                         <div className="h-1 rounded-full bg-surface-600 w-16 overflow-hidden">
                           <div
                             className="h-full bg-pitch-500 rounded-full"
@@ -81,7 +81,7 @@ export function TeamSelect() {
 
         {step === 'name' && selectedTeam && (
           <div className="max-w-sm mx-auto text-center">
-            <Badge team={selectedTeam} size="lg" />
+            <Badge team={selectedTeam} size="xl" />
             <h2 className="text-2xl font-bold text-white mt-4 mb-1">{selectedTeam.name}</h2>
             <p className="text-slate-400 text-sm mb-8">Enter your name as the new manager.</p>
 

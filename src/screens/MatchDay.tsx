@@ -4,15 +4,14 @@ import { LEAGUE_TEAMS } from '../data/teams';
 import { Badge } from '../components/Badge';
 import { Layout } from '../components/Layout';
 import type { Formation } from '../types/game';
-import { Shield, Swords } from 'lucide-react';
 
 const FORMATIONS: Formation[] = ['4-4-2', '4-3-3', '3-5-2', '5-3-2', '4-5-1'];
 const FORMATION_DESC: Record<Formation, string> = {
-  '4-4-2': 'Balanced — classic shape',
-  '4-3-3': 'Attacking — more strikers',
-  '3-5-2': 'Midfield — dominate possession',
-  '5-3-2': 'Defensive — protect the lead',
-  '4-5-1': 'Ultra defensive — park the bus',
+  '4-4-2': 'Balanced',
+  '4-3-3': 'Attacking',
+  '3-5-2': 'Midfield dominance',
+  '5-3-2': 'Defensive',
+  '4-5-1': 'Ultra defensive',
 };
 
 const POS_LABEL: Record<string, string> = { T: 'GK', V: 'DEF', M: 'MID', S: 'FWD' };
@@ -56,21 +55,51 @@ export function MatchDay() {
 
   return (
     <Layout>
-      <div className="space-y-6 max-w-2xl mx-auto">
-        {/* Match header */}
-        <div className="card p-6">
-          <div className="text-xs text-slate-500 text-center mb-4">Matchday {currentMatchday}</div>
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex flex-col items-center gap-2 flex-1">
-              <Badge team={myTeam} size="lg" />
-              <span className="font-bold text-white text-center">{myTeam.name}</span>
-              <span className="text-xs text-pitch-400 font-semibold">{isHome ? 'HOME' : 'AWAY'}</span>
+      <div className="space-y-5 max-w-2xl mx-auto">
+
+        {/* Stadium + match header */}
+        <div className="card overflow-hidden">
+          {/* Stadium background */}
+          <div className="relative h-36 overflow-hidden">
+            <img
+              src="/images/zuschau1.png"
+              alt="stadium"
+              className="w-full h-full object-cover"
+              style={{ imageRendering: 'pixelated' }}
+            />
+            <div className="absolute inset-0 bg-gradient-to-b from-black/30 to-black/70" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-white/70 text-xs font-semibold uppercase tracking-widest">Matchday {currentMatchday}</span>
             </div>
-            <div className="text-3xl font-extrabold text-slate-600">VS</div>
-            <div className="flex flex-col items-center gap-2 flex-1">
-              <Badge team={opponent} size="lg" />
-              <span className="font-bold text-white text-center">{opponent.name}</span>
-              <span className="text-xs text-slate-500 font-semibold">{isHome ? 'AWAY' : 'HOME'}</span>
+          </div>
+
+          {/* Pitch */}
+          <div className="relative">
+            <img
+              src="/images/feld1.png"
+              alt="pitch"
+              className="w-full object-cover"
+              style={{ imageRendering: 'pixelated', maxHeight: '160px' }}
+            />
+            {/* Teams overlaid on pitch */}
+            <div className="absolute inset-0 flex items-center justify-between px-8">
+              <div className="flex flex-col items-center gap-1 drop-shadow-lg">
+                <Badge team={myTeam} size="xl" />
+                <span className="text-white font-bold text-sm drop-shadow">{myTeam.name}</span>
+                <span className="text-pitch-400 text-xs font-bold">{isHome ? 'HOME' : 'AWAY'}</span>
+              </div>
+
+              {/* Scoreboard */}
+              <div className="flex flex-col items-center">
+                <img src="/images/anzeig1.png" alt="scoreboard" className="w-28 opacity-90" style={{ imageRendering: 'pixelated' }} />
+                <span className="text-white font-extrabold text-2xl tracking-widest mt-1 drop-shadow">? - ?</span>
+              </div>
+
+              <div className="flex flex-col items-center gap-1 drop-shadow-lg">
+                <Badge team={opponent} size="xl" />
+                <span className="text-white font-bold text-sm drop-shadow">{opponent.name}</span>
+                <span className="text-slate-300 text-xs font-bold">{isHome ? 'AWAY' : 'HOME'}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -78,32 +107,21 @@ export function MatchDay() {
         {/* Formation picker */}
         <div className="card p-5">
           <h3 className="text-sm font-semibold text-slate-400 mb-3">Tactical Setup</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
             {FORMATIONS.map(f => (
               <button
                 key={f}
                 onClick={() => setFormation(f)}
-                className={`p-3 rounded-lg border text-left transition-all ${
+                className={`p-2.5 rounded-lg border text-center transition-all ${
                   formation === f
                     ? 'border-pitch-500 bg-pitch-600/15 text-pitch-400'
                     : 'border-surface-600 hover:border-surface-500 text-slate-300'
                 }`}
               >
-                <div className="font-bold text-base">{f}</div>
+                <div className="font-bold text-sm">{f}</div>
                 <div className="text-xs text-slate-500 mt-0.5">{FORMATION_DESC[f]}</div>
               </button>
             ))}
-          </div>
-
-          <div className="mt-4 flex gap-3 text-sm text-slate-400">
-            <div className="flex items-center gap-1.5">
-              <Swords size={14} className="text-red-400" />
-              <span>{formation === '4-3-3' ? 'High' : formation === '3-5-2' ? 'Normal' : formation === '4-4-2' ? 'Normal' : 'Low'} attack</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Shield size={14} className="text-blue-400" />
-              <span>{formation === '5-3-2' || formation === '4-5-1' ? 'High' : 'Normal'} defence</span>
-            </div>
           </div>
         </div>
 
@@ -133,7 +151,7 @@ export function MatchDay() {
           )}
         </div>
 
-        <button className="btn-primary w-full py-4 text-lg" onClick={handlePlay}>
+        <button className="btn-primary w-full py-4 text-lg font-bold" onClick={handlePlay}>
           ⚽ Kick Off!
         </button>
       </div>
