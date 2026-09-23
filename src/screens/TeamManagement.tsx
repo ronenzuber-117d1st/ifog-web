@@ -229,6 +229,7 @@ function SliderRow({ label, value, max, remaining, color, onDec, onInc }: {
 function StatBar({ label, value, color }: { label: string; value: number; color: string }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+      <div style={{ fontSize: '10px', fontWeight: 'bold', color }}>{value}%</div>
       <div style={{ background: '#0d1117', border: `1px solid ${color}44`, borderRadius: '4px', width: '26px', height: '110px', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: `${value}%`, background: `linear-gradient(to top, ${color}, ${color}88)`, borderRadius: '3px' }} />
       </div>
@@ -238,7 +239,6 @@ function StatBar({ label, value, color }: { label: string; value: number; color:
       }}>
         {label}
       </div>
-      <div style={{ fontSize: '10px', fontWeight: 'bold', color }}>{value}%</div>
     </div>
   );
 }
