@@ -20,7 +20,7 @@ export function Layout({ children }: Props) {
   const pos = table.findIndex(r => r.teamId === managedTeamId) + 1;
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#0d1117', fontFamily: 'Arial, system-ui, sans-serif' }}>
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: '#0d1117', fontFamily: 'Arial, system-ui, sans-serif', overflow: 'hidden' }}>
 
       {/* Title bar */}
       <header style={{
