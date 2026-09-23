@@ -7,6 +7,19 @@ import { STARTING_BALANCE, WAGES_PER_MATCHDAY, calcMatchRevenue } from '../data/
 import { generateFixtures } from '../engine/scheduler';
 import { simulateFullMatch, simulateMatch } from '../engine/matchEngine';
 
+export interface SponsorDeal {
+  name: string;
+  amount: number;
+  matchdays: number;
+  matchdaysLeft: number;
+}
+
+export interface StadiumState {
+  pitch: number;      // 1-3
+  seats: number;      // 1-3
+  facilities: number; // 1-3
+}
+
 export interface GameStore {
   phase: GamePhase;
   managerName: string;
@@ -26,15 +39,36 @@ export interface GameStore {
   foodEnabled: boolean;
   merchandiseEnabled: boolean;
 
+  // Training allocation
+  trainingMassage: number;
+  trainingSkills: number;
+  trainingShape: number;
+
+  // Transfers
+  transfersUsed: number;
+
+  // Sponsorship
+  shirtSponsor: SponsorDeal | null;
+  borderSponsor: SponsorDeal | null;
+
+  // Stadium
+  stadium: StadiumState;
+
   startNewGame: (managerName: string, teamId: number) => void;
   playMatchday: () => void;
   setFormation: (f: Formation) => void;
   trainPlayer: (playerId: string) => void;
+  setTraining: (type: 'massage' | 'skills' | 'shape', value: number) => void;
   dismissEvent: () => void;
   setPhase: (p: GamePhase) => void;
   setPriceLevel: (l: 'low' | 'medium' | 'high') => void;
   setFoodEnabled: (v: boolean) => void;
   setMerchandiseEnabled: (v: boolean) => void;
+  acceptShirtSponsor: (deal: SponsorDeal) => void;
+  acceptBorderDeal: (deal: SponsorDeal) => void;
+  hirePlayer: (player: Player) => void;
+  sellPlayer: (playerId: string) => void;
+  upgradeStadium: (type: 'pitch' | 'seats' | 'facilities') => void;
   resetGame: () => void;
 }
 
@@ -79,6 +113,12 @@ function chairmanMsg(name: string, position: number): string {
   return template.replace('{name}', name);
 }
 
+const STADIUM_UPGRADE_COST: Record<string, number[]> = {
+  pitch: [0, 200_000, 500_000],
+  seats: [0, 400_000, 800_000],
+  facilities: [0, 100_000, 250_000],
+};
+
 export const useGameStore = create<GameStore>()(
   persist(
     (set, get) => ({
@@ -99,6 +139,13 @@ export const useGameStore = create<GameStore>()(
       priceLevel: 'medium',
       foodEnabled: true,
       merchandiseEnabled: true,
+      trainingMassage: 3,
+      trainingSkills: 4,
+      trainingShape: 3,
+      transfersUsed: 0,
+      shirtSponsor: null,
+      borderSponsor: null,
+      stadium: { pitch: 1, seats: 1, facilities: 1 },
 
       startNewGame: (managerName, teamId) => {
         const rosters = getAllRosters();
@@ -123,12 +170,19 @@ export const useGameStore = create<GameStore>()(
           priceLevel: 'medium',
           foodEnabled: true,
           merchandiseEnabled: true,
+          trainingMassage: 3,
+          trainingSkills: 4,
+          trainingShape: 3,
+          transfersUsed: 0,
+          shirtSponsor: null,
+          borderSponsor: null,
+          stadium: { pitch: 1, seats: 1, facilities: 1 },
         });
       },
 
       playMatchday: () => {
         const s = get();
-        const { currentMatchday, fixtures, rosters, managedTeamId, formation, table, balance, financeHistory, managerName, priceLevel, foodEnabled, merchandiseEnabled } = s;
+        const { currentMatchday, fixtures, rosters, managedTeamId, formation, table, balance, financeHistory, managerName, priceLevel, foodEnabled, merchandiseEnabled, trainingSkills, trainingShape, borderSponsor, stadium } = s;
 
         const dayFixtures = fixtures.filter(f => f.matchday === currentMatchday && !f.homeGoals && f.homeGoals !== 0);
         if (dayFixtures.length === 0) return;
@@ -136,6 +190,9 @@ export const useGameStore = create<GameStore>()(
         let newTable = [...table];
         let lastMatch: MatchReport | null = null;
         const updatedFixtures = [...fixtures];
+
+        // Training bonus: skills + shape → slight performance boost
+        const trainingMod = 1 + (trainingSkills * 0.008) + (trainingShape * 0.005) + (stadium.pitch - 1) * 0.02;
 
         for (const fixture of dayFixtures) {
           const homeTeam = LEAGUE_TEAMS.find(t => t.id === fixture.homeTeamId)!;
@@ -150,12 +207,13 @@ export const useGameStore = create<GameStore>()(
             const report = simulateFullMatch(
               fixture, homeTeam, awayTeam, homePlayers, awayPlayers,
               isHome ? formation : '4-4-2',
+              trainingMod,
             );
             homeGoals = report.fixture.homeGoals!;
             awayGoals = report.fixture.awayGoals!;
             lastMatch = report;
           } else {
-            const result = simulateMatch(homeTeam, awayTeam, homePlayers, awayPlayers, '4-4-2', '4-4-2');
+            const result = simulateMatch(homeTeam, awayTeam, homePlayers, awayPlayers, '4-4-2', '4-4-2', 1);
             homeGoals = result.homeGoals;
             awayGoals = result.awayGoals;
           }
@@ -172,9 +230,9 @@ export const useGameStore = create<GameStore>()(
 
         newTable = sortTable(newTable);
 
-        // Finance update
         const isHomeMatch = dayFixtures.some(f => f.homeTeamId === managedTeamId);
-        const matchRevenue = calcMatchRevenue(isHomeMatch, priceLevel, foodEnabled, merchandiseEnabled);
+        const seatBonus = (stadium.seats - 1) * 0.15;
+        const matchRevenue = calcMatchRevenue(isHomeMatch, priceLevel, foodEnabled, merchandiseEnabled) * (1 + seatBonus);
         const wages = WAGES_PER_MATCHDAY;
         const net = matchRevenue - wages;
 
@@ -182,7 +240,13 @@ export const useGameStore = create<GameStore>()(
         const eventMoney = event ? event.moneyEffect : 0;
         const eventPoints = event ? event.pointsEffect : 0;
 
-        const newBalance = balance + net + eventMoney;
+        // Border sponsor payment
+        const borderPayment = borderSponsor && borderSponsor.matchdaysLeft > 0 ? borderSponsor.amount : 0;
+        const newBorderSponsor = borderSponsor
+          ? { ...borderSponsor, matchdaysLeft: borderSponsor.matchdaysLeft - 1 }
+          : null;
+
+        const newBalance = balance + net + eventMoney + borderPayment;
 
         let adjustedTable = newTable;
         if (eventPoints !== 0) {
@@ -195,14 +259,23 @@ export const useGameStore = create<GameStore>()(
         }
 
         const pos = adjustedTable.findIndex(r => r.teamId === managedTeamId) + 1;
-        const entry: FinanceEntry = {
-          matchday: currentMatchday,
-          description: isHomeMatch ? 'Home match revenue' : 'Away match (wages only)',
-          amount: net + eventMoney,
-          running: newBalance,
-        };
+        const entries: FinanceEntry[] = [
+          {
+            matchday: currentMatchday,
+            description: isHomeMatch ? 'Home match revenue' : 'Away match (wages only)',
+            amount: net + eventMoney,
+            running: newBalance - borderPayment,
+          },
+        ];
+        if (borderPayment > 0) {
+          entries.push({
+            matchday: currentMatchday,
+            description: `Border sponsorship: ${borderSponsor!.name}`,
+            amount: borderPayment,
+            running: newBalance,
+          });
+        }
 
-        // Heal injured players
         const newRosters = { ...rosters };
         if (newRosters[managedTeamId]) {
           newRosters[managedTeamId] = newRosters[managedTeamId].map(p =>
@@ -216,15 +289,31 @@ export const useGameStore = create<GameStore>()(
           lastMatch,
           pendingEvent: event,
           balance: newBalance,
-          financeHistory: [...financeHistory, entry],
+          financeHistory: [...financeHistory, ...entries],
           currentMatchday: currentMatchday + 1,
           chairmanMessage: chairmanMsg(managerName, pos),
           rosters: newRosters,
           phase: 'result',
+          transfersUsed: 0,
+          borderSponsor: newBorderSponsor,
         });
       },
 
       setFormation: (formation) => set({ formation }),
+
+      setTraining: (type, value) => {
+        const s = get();
+        const total = s.trainingMassage + s.trainingSkills + s.trainingShape;
+        const oldVal = type === 'massage' ? s.trainingMassage : type === 'skills' ? s.trainingSkills : s.trainingShape;
+        const newTotal = total - oldVal + value;
+        if (newTotal <= 10 && value >= 0 && value <= 10) {
+          set({
+            trainingMassage: type === 'massage' ? value : s.trainingMassage,
+            trainingSkills:  type === 'skills'  ? value : s.trainingSkills,
+            trainingShape:   type === 'shape'   ? value : s.trainingShape,
+          });
+        }
+      },
 
       trainPlayer: (playerId) => {
         const { rosters, managedTeamId, balance } = get();
@@ -234,14 +323,83 @@ export const useGameStore = create<GameStore>()(
         const updated = players.map(p => {
           if (p.id !== playerId) return p;
           const newProgress = p.trainingProgress + 1;
-          if (newProgress >= 5) {
-            return { ...p, skill: Math.min(9, p.skill + 1), trainingProgress: 0 };
-          }
+          if (newProgress >= 5) return { ...p, skill: Math.min(9, p.skill + 1), trainingProgress: 0 };
           return { ...p, trainingProgress: newProgress };
         });
+        set({ rosters: { ...rosters, [managedTeamId]: updated }, balance: balance - cost });
+      },
+
+      acceptShirtSponsor: (deal) => {
+        const { balance, financeHistory, currentMatchday } = get();
         set({
-          rosters: { ...rosters, [managedTeamId]: updated },
+          shirtSponsor: deal,
+          balance: balance + deal.amount,
+          financeHistory: [...financeHistory, {
+            matchday: currentMatchday,
+            description: `Shirt sponsor: ${deal.name}`,
+            amount: deal.amount,
+            running: balance + deal.amount,
+          }],
+        });
+      },
+
+      acceptBorderDeal: (deal) => {
+        set({ borderSponsor: deal });
+      },
+
+      hirePlayer: (player) => {
+        const { rosters, managedTeamId, balance, transfersUsed, currentMatchday, financeHistory } = get();
+        const cost = player.skill * 75_000;
+        if (transfersUsed >= 3 || balance < cost) return;
+        const players = rosters[managedTeamId] ?? [];
+        set({
+          rosters: { ...rosters, [managedTeamId]: [...players, player] },
           balance: balance - cost,
+          transfersUsed: transfersUsed + 1,
+          financeHistory: [...financeHistory, {
+            matchday: currentMatchday,
+            description: `Transfer in: ${player.name}`,
+            amount: -cost,
+            running: balance - cost,
+          }],
+        });
+      },
+
+      sellPlayer: (playerId) => {
+        const { rosters, managedTeamId, balance, transfersUsed, currentMatchday, financeHistory } = get();
+        if (transfersUsed >= 3) return;
+        const players = rosters[managedTeamId] ?? [];
+        const player = players.find(p => p.id === playerId);
+        if (!player) return;
+        const sellPrice = player.skill * 75_000;
+        set({
+          rosters: { ...rosters, [managedTeamId]: players.filter(p => p.id !== playerId) },
+          balance: balance + sellPrice,
+          transfersUsed: transfersUsed + 1,
+          financeHistory: [...financeHistory, {
+            matchday: currentMatchday,
+            description: `Transfer out: ${player.name}`,
+            amount: sellPrice,
+            running: balance + sellPrice,
+          }],
+        });
+      },
+
+      upgradeStadium: (type) => {
+        const { stadium, balance } = get();
+        const current = stadium[type];
+        if (current >= 3) return;
+        const cost = STADIUM_UPGRADE_COST[type][current];
+        if (balance < cost) return;
+        set({
+          stadium: { ...stadium, [type]: current + 1 },
+          balance: balance - cost,
+          financeHistory: [...get().financeHistory, {
+            matchday: get().currentMatchday,
+            description: `Stadium upgrade: ${type}`,
+            amount: -cost,
+            running: balance - cost,
+          }],
         });
       },
 

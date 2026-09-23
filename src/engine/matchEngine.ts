@@ -36,10 +36,11 @@ export function simulateMatch(
   awayPlayers: Player[],
   homeFormation: Formation,
   awayFormation: Formation,
+  managedTeamMod = 1,
 ): { homeGoals: number; awayGoals: number } {
-  const homeAtk = teamEffectiveSkill(homeTeam, homePlayers, homeFormation);
+  const homeAtk = teamEffectiveSkill(homeTeam, homePlayers, homeFormation) * managedTeamMod;
   const awayAtk = teamEffectiveSkill(awayTeam, awayPlayers, awayFormation);
-  const homeDef = teamDefSkill(homeTeam, homePlayers, homeFormation);
+  const homeDef = teamDefSkill(homeTeam, homePlayers, homeFormation) * managedTeamMod;
   const awayDef = teamDefSkill(awayTeam, awayPlayers, awayFormation);
 
   const homeAdv = 5;
@@ -56,9 +57,10 @@ export function simulateFullMatch(
   homePlayers: Player[],
   awayPlayers: Player[],
   formation: Formation,
+  managedTeamMod = 1,
 ): MatchReport {
   const { homeGoals, awayGoals } = simulateMatch(
-    homeTeam, awayTeam, homePlayers, awayPlayers, formation, '4-4-2',
+    homeTeam, awayTeam, homePlayers, awayPlayers, formation, '4-4-2', managedTeamMod,
   );
 
   const events: MatchEvent[] = [];
@@ -78,7 +80,6 @@ export function simulateFullMatch(
   addGoalEvents(homeGoals, homeTeam.id, homePlayers.length > 0 ? homePlayers : []);
   addGoalEvents(awayGoals, awayTeam.id, awayPlayers.length > 0 ? awayPlayers : []);
 
-  // Random yellow cards
   if (Math.random() < 0.6) {
     const all = [...homePlayers, ...awayPlayers];
     const recipient = all[Math.floor(Math.random() * all.length)];

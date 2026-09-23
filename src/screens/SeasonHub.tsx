@@ -2,16 +2,17 @@ import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/useGameStore';
 import { LEAGUE_TEAMS } from '../data/teams';
 import { LeagueTable } from '../components/LeagueTable';
-import { StatCard } from '../components/StatCard';
 import { Badge } from '../components/Badge';
 import { EventModal } from '../components/EventModal';
 import { Layout } from '../components/Layout';
-import { Calendar, MessageSquare } from 'lucide-react';
+import { img } from '../utils/images';
+
+const RAISED = { border: '2px solid', borderColor: '#ffffff #808080 #808080 #ffffff' } as const;
 
 export function SeasonHub() {
   const navigate = useNavigate();
   const {
-    managedTeamId, currentMatchday, totalMatchdays, table, fixtures,
+    managedTeamId, managerName, currentMatchday, totalMatchdays, table, fixtures,
     balance, chairmanMessage, pendingEvent, dismissEvent, phase,
   } = useGameStore();
 
@@ -35,6 +36,7 @@ export function SeasonHub() {
     .reverse();
 
   const seasonOver = currentMatchday > totalMatchdays;
+  const portraitId = ((managedTeamId - 1) % 6) + 1;
 
   return (
     <Layout>
@@ -42,97 +44,152 @@ export function SeasonHub() {
         <EventModal event={pendingEvent} onClose={dismissEvent} />
       )}
 
-      <div className="space-y-6">
-        {/* Season over banner */}
-        {seasonOver && (
-          <div className="card p-6 bg-pitch-700/20 border-pitch-600 text-center">
-            <div className="text-3xl mb-2">🏆</div>
-            <h2 className="text-xl font-bold text-white mb-1">Season Complete!</h2>
-            <p className="text-slate-300">
-              You finished <span className="font-bold text-pitch-400">{position}{ordinal(position)}</span> in the league.
-            </p>
-            <button className="btn-primary mt-4" onClick={() => navigate('/')}>Main Menu</button>
+      <div style={{ display: 'flex', minHeight: 'calc(100vh - 28px)', fontFamily: 'Arial, system-ui' }}>
+
+        {/* LEFT PANEL - Manager info */}
+        <div style={{
+          width: '170px', flexShrink: 0,
+          background: '#0d1117',
+          borderRight: '2px solid #000080',
+          display: 'flex', flexDirection: 'column',
+          overflow: 'hidden',
+        }}>
+          {/* Manager portrait */}
+          <div style={{ background: '#1a1a3a', overflow: 'hidden', height: '130px' }}>
+            <img
+              src={img(`manag${portraitId}_1.png`)}
+              style={{ width: '100%', height: '100%', objectFit: 'cover', imageRendering: 'pixelated' }}
+              alt="Manager"
+            />
           </div>
-        )}
 
-        {/* Chairman message */}
-        <div className="card p-4 flex items-start gap-3">
-          <MessageSquare size={18} className="text-pitch-500 mt-0.5 flex-shrink-0" />
-          <p className="text-slate-300 text-sm italic">"{chairmanMessage}"</p>
+          {/* Team badge */}
+          <div style={{ padding: '8px', textAlign: 'center', borderBottom: '1px solid #1e2535' }}>
+            <img
+              src={img(`wappen${String(managedTeamId).padStart(2, '0')}.png`)}
+              style={{ width: '52px', height: '52px', imageRendering: 'pixelated', display: 'block', margin: '0 auto 4px' }}
+              alt={myTeam.name}
+            />
+            <div style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '12px' }}>{myTeam.name}</div>
+            <div style={{ color: '#888', fontSize: '10px' }}>{managerName}</div>
+          </div>
+
+          {/* Stats box */}
+          <div style={{ padding: '8px', fontSize: '11px' }}>
+            {[
+              ['SEASON', '1994/95'],
+              ['MATCHDAY', `${currentMatchday}/${totalMatchdays}`],
+              ['POSITION', position > 0 ? `${position}${ordinal(position)}` : '-'],
+              ['POINTS', String(myRow?.points ?? 0)],
+              ['W/D/L', `${myRow?.won ?? 0}/${myRow?.drawn ?? 0}/${myRow?.lost ?? 0}`],
+            ].map(([label, value]) => (
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', borderBottom: '1px solid #1e2535' }}>
+                <span style={{ color: '#4488aa', fontSize: '10px' }}>{label}</span>
+                <span style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '10px' }}>{value}</span>
+              </div>
+            ))}
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0' }}>
+              <span style={{ color: '#4488aa', fontSize: '10px' }}>CASH</span>
+              <span style={{ fontWeight: 'bold', fontSize: '10px', color: balance >= 0 ? '#4ade80' : '#f87171' }}>
+                £{(balance / 1000).toFixed(0)}K
+              </span>
+            </div>
+          </div>
+
+          {/* Stadium image */}
+          <div style={{ marginTop: 'auto', overflow: 'hidden' }}>
+            <img
+              src={img('zuschau1.png')}
+              style={{ width: '100%', imageRendering: 'pixelated', display: 'block', opacity: 0.7 }}
+              alt=""
+            />
+          </div>
         </div>
 
-        {/* Top stats */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <StatCard label="Position" value={`${position}${ordinal(position)}`} sub="in the league" accent />
-          <StatCard label="Points" value={myRow?.points ?? 0} sub={`${myRow?.played ?? 0} played`} />
-          <StatCard label="Balance" value={`£${(balance / 1_000_000).toFixed(2)}M`} sub={balance >= 0 ? 'in the black' : 'in the red'} accent={balance >= 0} />
-          <StatCard label="Matchday" value={`${currentMatchday} / ${totalMatchdays}`} sub="this season" />
-        </div>
+        {/* CENTER - Main content */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '10px', background: '#0d1117' }}>
 
-        <div className="grid sm:grid-cols-2 gap-6">
+          {/* Season over banner */}
+          {seasonOver && (
+            <div style={{ background: '#15803d', border: '2px solid #4ade80', padding: '16px', textAlign: 'center', marginBottom: '10px', borderRadius: '4px' }}>
+              <div style={{ fontSize: '24px', marginBottom: '4px' }}>🏆</div>
+              <div style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '16px' }}>Season Complete!</div>
+              <div style={{ color: '#86efac', fontSize: '13px', margin: '4px 0' }}>
+                You finished <strong>{position}{ordinal(position)}</strong> with {myRow?.points ?? 0} points.
+              </div>
+              <button
+                onClick={() => navigate('/')}
+                style={{ ...RAISED, background: '#c0c0c0', padding: '6px 16px', cursor: 'pointer', marginTop: '8px', fontSize: '12px' }}
+              >
+                Main Menu
+              </button>
+            </div>
+          )}
+
+          {/* Chairman message */}
+          <div style={{ background: '#161b27', border: '1px solid #28314a', borderRadius: '4px', padding: '8px 12px', marginBottom: '10px' }}>
+            <div style={{ color: '#4ade80', fontSize: '10px', marginBottom: '3px' }}>CHAIRMAN:</div>
+            <div style={{ color: '#94a3b8', fontSize: '12px', fontStyle: 'italic' }}>"{chairmanMessage}"</div>
+          </div>
+
           {/* Next fixture */}
           {!seasonOver && nextFixture && opponent && (
-            <div className="card p-5">
-              <div className="flex items-center gap-2 mb-4">
-                <Calendar size={16} className="text-pitch-500" />
-                <span className="text-sm font-semibold text-slate-300">Next Match — Matchday {currentMatchday}</span>
-              </div>
-              <div className="flex items-center justify-between gap-4 mb-5">
-                <div className="flex items-center gap-3">
+            <div style={{ background: '#161b27', border: '1px solid #28314a', borderRadius: '4px', padding: '10px', marginBottom: '10px' }}>
+              <div style={{ color: '#94a3b8', fontSize: '10px', marginBottom: '8px' }}>NEXT MATCH — MATCHDAY {currentMatchday}</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Badge team={myTeam} size="md" />
                   <div>
-                    <div className="font-semibold text-white">{myTeam.name}</div>
-                    <div className="text-xs text-pitch-400">{isHome ? 'HOME' : 'AWAY'}</div>
+                    <div style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '13px' }}>{myTeam.name}</div>
+                    <div style={{ color: '#4ade80', fontSize: '10px' }}>{isHome ? 'HOME' : 'AWAY'}</div>
                   </div>
                 </div>
-                <span className="text-xl font-bold text-slate-500">vs</span>
-                <div className="flex items-center gap-3 flex-row-reverse">
+                <div style={{ color: '#64748b', fontWeight: 'bold', fontSize: '16px' }}>vs</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexDirection: 'row-reverse' }}>
                   <Badge team={opponent} size="md" />
-                  <div className="text-right">
-                    <div className="font-semibold text-white">{opponent.name}</div>
-                    <div className="text-xs text-slate-500">{isHome ? 'AWAY' : 'HOME'}</div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ color: '#ffffff', fontWeight: 'bold', fontSize: '13px' }}>{opponent.name}</div>
+                    <div style={{ color: '#94a3b8', fontSize: '10px' }}>{isHome ? 'AWAY' : 'HOME'}</div>
                   </div>
                 </div>
               </div>
-              <button className="btn-primary w-full" onClick={() => navigate('/match')}>
-                Play Matchday {currentMatchday} →
+              <button
+                onClick={() => navigate('/match')}
+                style={{ ...RAISED, background: '#000080', color: '#ffffff', padding: '8px', cursor: 'pointer', width: '100%', fontSize: '13px', fontWeight: 'bold' }}
+              >
+                ⚽ Play Matchday {currentMatchday}
               </button>
             </div>
           )}
 
           {/* Recent results */}
-          <div className="card p-5">
-            <h3 className="text-sm font-semibold text-slate-400 mb-3">Recent Results</h3>
-            {recentResults.length === 0 && (
-              <p className="text-slate-500 text-sm">No results yet.</p>
-            )}
-            <div className="space-y-2">
+          {recentResults.length > 0 && (
+            <div style={{ background: '#161b27', border: '1px solid #28314a', borderRadius: '4px', padding: '10px', marginBottom: '10px' }}>
+              <div style={{ color: '#94a3b8', fontSize: '10px', marginBottom: '8px' }}>RECENT RESULTS</div>
               {recentResults.map(f => {
                 const isHomeResult = f.homeTeamId === managedTeamId;
                 const myGoals = isHomeResult ? f.homeGoals! : f.awayGoals!;
                 const theirGoals = isHomeResult ? f.awayGoals! : f.homeGoals!;
                 const opp = LEAGUE_TEAMS.find(t => t.id === (isHomeResult ? f.awayTeamId : f.homeTeamId))!;
-                const w = myGoals > theirGoals;
-                const d = myGoals === theirGoals;
+                const w = myGoals > theirGoals, d = myGoals === theirGoals;
+                const resultColor = w ? '#4ade80' : d ? '#60a5fa' : '#f87171';
                 return (
-                  <div key={f.id} className="flex items-center gap-3 text-sm">
-                    <span className={`tag ${w ? 'bg-pitch-700/40 text-pitch-400' : d ? 'bg-blue-900/40 text-blue-400' : 'bg-red-900/30 text-red-400'}`}>
-                      {w ? 'W' : d ? 'D' : 'L'}
-                    </span>
-                    <span className="text-slate-400 text-xs">{isHomeResult ? 'H' : 'A'}</span>
-                    <span className="text-slate-300 flex-1">{opp.name}</span>
-                    <span className="font-mono font-semibold text-white">{myGoals}–{theirGoals}</span>
+                  <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '3px 0', borderBottom: '1px solid #1e2535', fontSize: '12px' }}>
+                    <span style={{ background: w ? '#15803d' : d ? '#1e40af' : '#991b1b', color: '#fff', padding: '0 4px', fontSize: '10px', fontWeight: 'bold', minWidth: '14px', textAlign: 'center' }}>{w ? 'W' : d ? 'D' : 'L'}</span>
+                    <span style={{ color: '#64748b', fontSize: '10px' }}>{isHomeResult ? 'H' : 'A'}</span>
+                    <span style={{ color: '#cbd5e1', flex: 1 }}>{opp.name}</span>
+                    <span style={{ fontWeight: 'bold', color: resultColor, fontFamily: 'monospace' }}>{myGoals}–{theirGoals}</span>
                   </div>
                 );
               })}
             </div>
-          </div>
-        </div>
+          )}
 
-        {/* League table */}
-        <div className="card p-5">
-          <h3 className="text-sm font-semibold text-slate-400 mb-3">League Table</h3>
-          <LeagueTable table={table} managedTeamId={managedTeamId} />
+          {/* League table */}
+          <div style={{ background: '#161b27', border: '1px solid #28314a', borderRadius: '4px', padding: '10px' }}>
+            <div style={{ color: '#94a3b8', fontSize: '10px', marginBottom: '8px' }}>PREMIER LEAGUE TABLE</div>
+            <LeagueTable table={table} managedTeamId={managedTeamId} />
+          </div>
         </div>
       </div>
     </Layout>

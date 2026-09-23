@@ -5,6 +5,8 @@ import { SeasonHub } from './screens/SeasonHub';
 import { MatchDay } from './screens/MatchDay';
 import { TeamManagement } from './screens/TeamManagement';
 import { Finances } from './screens/Finances';
+import { Stadium } from './screens/Stadium';
+import { Desk } from './screens/Desk';
 import { useGameStore } from './store/useGameStore';
 
 function RequireGame({ children }: { children: React.ReactNode }) {
@@ -23,6 +25,8 @@ export default function App() {
         <Route path="/match" element={<RequireGame><MatchDay /></RequireGame>} />
         <Route path="/team" element={<RequireGame><TeamManagement /></RequireGame>} />
         <Route path="/finances" element={<RequireGame><Finances /></RequireGame>} />
+        <Route path="/stadium" element={<RequireGame><Stadium /></RequireGame>} />
+        <Route path="/desk" element={<RequireGame><Desk /></RequireGame>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </HashRouter>
