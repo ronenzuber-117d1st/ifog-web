@@ -24,6 +24,7 @@ export interface GameStore {
   phase: GamePhase;
   managerName: string;
   managedTeamId: number;
+  portrait: string; // e.g., 'manag3' or 'manak2'
   currentMatchday: number;
   totalMatchdays: number;
   rosters: Record<number, Player[]>;
@@ -54,7 +55,7 @@ export interface GameStore {
   // Stadium
   stadium: StadiumState;
 
-  startNewGame: (managerName: string, teamId: number) => void;
+  startNewGame: (managerName: string, teamId: number, portrait?: string) => void;
   playMatchday: () => void;
   setFormation: (f: Formation) => void;
   trainPlayer: (playerId: string) => void;
@@ -125,6 +126,7 @@ export const useGameStore = create<GameStore>()(
       phase: 'menu',
       managerName: '',
       managedTeamId: 1,
+      portrait: 'manag1',
       currentMatchday: 1,
       totalMatchdays: 38,
       rosters: {},
@@ -147,15 +149,17 @@ export const useGameStore = create<GameStore>()(
       borderSponsors: [],
       stadium: { pitch: 1, seats: 1, facilities: 1 },
 
-      startNewGame: (managerName, teamId) => {
+      startNewGame: (managerName, teamId, portrait) => {
         const rosters = getAllRosters();
         const teamIds = LEAGUE_TEAMS.map(t => t.id);
         const fixtures = generateFixtures(teamIds);
         const table = LEAGUE_TEAMS.map(t => makeTableRow(t.id));
+        const defaultPortrait = `manag${((teamId - 1) % 6) + 1}`;
         set({
           phase: 'season',
           managerName,
           managedTeamId: teamId,
+          portrait: portrait ?? defaultPortrait,
           currentMatchday: 1,
           totalMatchdays: 38,
           rosters,

@@ -218,8 +218,7 @@ function ShirtTab({ shirtSponsor, shirtOffer, onAccept, balance: _balance }: {
       {/* Right: player wearing shirt */}
       <div style={{ flex: 1, ...CARD, overflow: 'hidden', minHeight: '300px', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <img
-          src={img('player-shirt.png')}
-          onError={(e) => { (e.target as HTMLImageElement).src = img('superm2.png'); }}
+          src={img('superm0.png')}
           style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated' }}
           alt=""
         />

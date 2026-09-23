@@ -15,14 +15,9 @@ const NAV = [
 
 export function Layout({ children }: Props) {
   const navigate = useNavigate();
-  const { managedTeamId, currentMatchday, totalMatchdays, balance, table, resetGame } = useGameStore();
+  const { managedTeamId, currentMatchday, totalMatchdays, balance, table } = useGameStore();
   const location = useLocation();
   const pos = table.findIndex(r => r.teamId === managedTeamId) + 1;
-
-  const handleExit = () => {
-    resetGame();
-    navigate('/');
-  };
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#0d1117', fontFamily: 'Arial, system-ui, sans-serif' }}>
@@ -121,7 +116,7 @@ export function Layout({ children }: Props) {
 
           {/* Exit button */}
           <button
-            onClick={handleExit}
+            onClick={() => navigate('/')}
             style={{
               background: '#1a0a0a',
               border: '1px solid #4a1a1a',

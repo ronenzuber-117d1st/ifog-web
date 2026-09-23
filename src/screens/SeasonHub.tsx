@@ -13,7 +13,7 @@ export function SeasonHub() {
   const navigate = useNavigate();
   const {
     managedTeamId, managerName, currentMatchday, totalMatchdays, table, fixtures,
-    balance, chairmanMessage, pendingEvent, dismissEvent, phase,
+    balance, chairmanMessage, pendingEvent, dismissEvent, phase, portrait,
   } = useGameStore();
 
   const myTeam = LEAGUE_TEAMS.find(t => t.id === managedTeamId)!;
@@ -36,7 +36,9 @@ export function SeasonHub() {
     .reverse();
 
   const seasonOver = currentMatchday > totalMatchdays;
-  const portraitId = ((managedTeamId - 1) % 6) + 1;
+  const portraitSrc = portrait
+    ? img(`${portrait}_1.png`)
+    : img(`manag${((managedTeamId - 1) % 6) + 1}_1.png`);
 
   return (
     <Layout>
@@ -57,7 +59,7 @@ export function SeasonHub() {
           {/* Manager portrait */}
           <div style={{ background: '#1a1a3a', overflow: 'hidden', height: '130px' }}>
             <img
-              src={img(`manag${portraitId}_1.png`)}
+              src={portraitSrc}
               style={{ width: '100%', height: '100%', objectFit: 'cover', imageRendering: 'pixelated' }}
               alt="Manager"
             />

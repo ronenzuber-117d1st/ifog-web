@@ -23,6 +23,10 @@ const INCLUDE = [
   ...Array.from({ length: 6 }, (_, i) =>
     Array.from({ length: 3 }, (_, j) => `MANAG${i + 1}_${j + 1}.BMP`)
   ).flat(),
+  // Female manager portraits (4 types × 3 variants)
+  ...Array.from({ length: 4 }, (_, i) =>
+    Array.from({ length: 3 }, (_, j) => `MANAK${i + 1}_${j + 1}.BMP`)
+  ).flat(),
   // Team photos
   'MANNSCH1.BMP', 'MANNSCH2.BMP', 'MANNSCH3.BMP',
   // Player cards by position
