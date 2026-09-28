@@ -35,10 +35,10 @@ function pick<T>(arr: T[], rng: () => number): T {
   return arr[Math.floor(rng() * arr.length)];
 }
 
-const GK_NAMES = ['Brickwall','Dropshot','Fumbles','Ironpalms','Lastman','Nethergate','Oilslick','Safehands','Woodwork','Flapper','Glovesworth','Quickcatch','Palmtree','Reflex','Stretcher'];
-const DEF_NAMES = ['Blockhead','Bulldoze','Cement','Crunch','Deadleg','Elbow','Flatfoot','Granite','Hardcase','Ironwood','Legwork','Lumber','Noggin','Pillar','Stopper','Tackle','Wallop','Slab','Obstacle','Redbrick'];
-const MID_NAMES = ['Compass','Dribbles','Dynamo','Energize','Grafter','Halfback','Legsman','Liaison','Linchpin','Navigator','Passmore','Playmaker','Runabout','Spinner','Stamina','Trickster','Turnover','Twinkle','Workhorse','Zippy'];
-const STR_NAMES = ['Backheel','Bangers','Clincher','Deadball','Diver','Finisher','Goalgetter','Headcase','Hitman','Kapow','Marksman','Netbuster','Nutmeg','Poacher','Predator','Quickdraw','Scorer','Sniper','Topgun','Volley'];
+const GK_NAMES = ['Kopke','Iliushin','Kalvin','Napper','Sherman','Vickers','Cobben','Davis','Lavender','Paul','Taylor','Walker','Bright','Dennis','Lewis','Mally'];
+const DEF_NAMES = ['Amaretto','Cruff','Eddie','Henman','Johnson','Moore','Vincent','Ward','Adams','Ginger','Lawson','Peel','Reynolds','Thorn','Blake','Dunning','Kavanagh','Melvin','Small','Vaughan','Atkins','Finnigan','Jenkins','Marks','Rafferty','Trevors','Black','Ely','Kenneth','Norman'];
+const MID_NAMES = ['De Toto','Romarino','Allen','Campbell','Jones','Myers','Smith','Vine','Beesley','Foster','Jacobs','Newman','Stanners','Wheeler','Collins','Edwards','Kieron','Leonard','Ray','Thomas','Anderson','Calvers','Justin','Neil','Stapleton','Vale','Barrett','Davidson','Kenny','Parker'];
+const STR_NAMES = ['Klinsman','Yuruba','Donaldson','Ellis','Lee','Osbourne','Quentin','Walters','Court','Evergreen','Murdoch','Dell','Peters','Forrest','Haynes','Niall','Goldman','Finchley','Gilbert','Oakley','Phillips','Grant','Herman','Gordon','Ainsley','Jacks','Kershaw','Dickson','James','Arthur'];
 
 const HARDCODED: Record<number, Player[]> = {
   1: buildRoster(1, [

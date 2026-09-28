@@ -18,13 +18,25 @@ export interface StadiumState {
   pitch: number;      // 1-3
   seats: number;      // 1-3
   facilities: number; // 1-3
+  lights: number;     // 1-3
 }
+
+export interface StaffState {
+  fishChips: number;    // 0=none, 1/2/3=tier
+  fanShop: number;
+  ticketSales: number;
+  cheerleader: number;
+  coach: number;        // 0=none, 1-4=coach index (cotrai3/4/5/6)
+}
+
+export type Difficulty = 'beginner' | 'intermediate' | 'expert';
 
 export interface GameStore {
   phase: GamePhase;
   managerName: string;
   managedTeamId: number;
   portrait: string; // e.g., 'manag3' or 'manak2'
+  difficulty: Difficulty;
   currentMatchday: number;
   totalMatchdays: number;
   rosters: Record<number, Player[]>;
@@ -55,7 +67,12 @@ export interface GameStore {
   // Stadium
   stadium: StadiumState;
 
-  startNewGame: (managerName: string, teamId: number, portrait?: string) => void;
+  // Staff
+  staff: StaffState;
+  pendingBet: { amount: number; winMultiplier: number } | null;
+  eventLog: { matchday: number; text: string }[];
+
+  startNewGame: (managerName: string, teamId: number, portrait?: string, difficulty?: Difficulty) => void;
   playMatchday: () => void;
   setFormation: (f: Formation) => void;
   trainPlayer: (playerId: string) => void;
@@ -69,8 +86,13 @@ export interface GameStore {
   acceptBorderDeal: (deal: SponsorDeal) => void;
   hirePlayer: (player: Player) => void;
   sellPlayer: (playerId: string) => void;
-  upgradeStadium: (type: 'pitch' | 'seats' | 'facilities') => void;
+  upgradeStadium: (type: 'pitch' | 'seats' | 'facilities' | 'lights') => void;
+  bribeReferee: () => void;
   resetGame: () => void;
+  setStaff: (role: keyof Omit<StaffState, 'coach'>, tier: number) => void;
+  setCoach: (coachId: number) => void;
+  placeBet: (amount: number, winMultiplier: number) => void;
+  cancelBet: () => void;
 }
 
 function makeTableRow(teamId: number): TableRow {
@@ -115,9 +137,10 @@ function chairmanMsg(name: string, position: number): string {
 }
 
 const STADIUM_UPGRADE_COST: Record<string, number[]> = {
-  pitch: [0, 200_000, 500_000],
-  seats: [0, 400_000, 800_000],
+  pitch:      [0, 200_000, 500_000],
+  seats:      [0, 400_000, 800_000],
   facilities: [0, 100_000, 250_000],
+  lights:     [0, 150_000, 350_000],
 };
 
 export const useGameStore = create<GameStore>()(
@@ -127,6 +150,7 @@ export const useGameStore = create<GameStore>()(
       managerName: '',
       managedTeamId: 1,
       portrait: 'manag1',
+      difficulty: 'intermediate',
       currentMatchday: 1,
       totalMatchdays: 38,
       rosters: {},
@@ -147,26 +171,35 @@ export const useGameStore = create<GameStore>()(
       transfersUsed: 0,
       shirtSponsor: null,
       borderSponsors: [],
-      stadium: { pitch: 1, seats: 1, facilities: 1 },
+      stadium: { pitch: 1, seats: 1, facilities: 1, lights: 1 },
+      staff: { fishChips: 0, fanShop: 0, ticketSales: 0, cheerleader: 0, coach: 0 },
+      pendingBet: null,
+      eventLog: [],
 
-      startNewGame: (managerName, teamId, portrait) => {
+      startNewGame: (managerName, teamId, portrait, difficulty = 'intermediate') => {
         const rosters = getAllRosters();
         const teamIds = LEAGUE_TEAMS.map(t => t.id);
         const fixtures = generateFixtures(teamIds);
         const table = LEAGUE_TEAMS.map(t => makeTableRow(t.id));
         const defaultPortrait = `manag${((teamId - 1) % 6) + 1}`;
+        const startingBalances: Record<Difficulty, number> = {
+          beginner:     3_000_000,
+          intermediate: STARTING_BALANCE,
+          expert:         750_000,
+        };
         set({
           phase: 'season',
           managerName,
           managedTeamId: teamId,
           portrait: portrait ?? defaultPortrait,
+          difficulty,
           currentMatchday: 1,
           totalMatchdays: 38,
           rosters,
           formation: '4-4-2',
           table,
           fixtures,
-          balance: STARTING_BALANCE,
+          balance: startingBalances[difficulty],
           financeHistory: [],
           pendingEvent: null,
           lastMatch: null,
@@ -180,13 +213,16 @@ export const useGameStore = create<GameStore>()(
           transfersUsed: 0,
           shirtSponsor: null,
           borderSponsors: [],
-          stadium: { pitch: 1, seats: 1, facilities: 1 },
+          stadium: { pitch: 1, seats: 1, facilities: 1, lights: 1 },
+          staff: { fishChips: 0, fanShop: 0, ticketSales: 0, cheerleader: 0, coach: 0 },
+          pendingBet: null,
+          eventLog: [],
         });
       },
 
       playMatchday: () => {
         const s = get();
-        const { currentMatchday, fixtures, rosters, managedTeamId, formation, table, balance, financeHistory, managerName, priceLevel, foodEnabled, merchandiseEnabled, trainingSkills, trainingShape, borderSponsors, stadium } = s;
+        const { currentMatchday, fixtures, rosters, managedTeamId, formation, table, balance, financeHistory, managerName, priceLevel, foodEnabled, merchandiseEnabled, trainingSkills, trainingShape, borderSponsors, stadium, difficulty, staff, pendingBet, eventLog } = s;
 
         const dayFixtures = fixtures.filter(f => f.matchday === currentMatchday && !f.homeGoals && f.homeGoals !== 0);
         if (dayFixtures.length === 0) return;
@@ -195,7 +231,8 @@ export const useGameStore = create<GameStore>()(
         let lastMatch: MatchReport | null = null;
         const updatedFixtures = [...fixtures];
 
-        const trainingMod = 1 + (trainingSkills * 0.008) + (trainingShape * 0.005) + (stadium.pitch - 1) * 0.02;
+        const difficultyMod = difficulty === 'beginner' ? 1.12 : difficulty === 'expert' ? 0.88 : 1.0;
+        const trainingMod = (1 + (trainingSkills * 0.008) + (trainingShape * 0.005) + (stadium.pitch - 1) * 0.02) * difficultyMod;
 
         for (const fixture of dayFixtures) {
           const homeTeam = LEAGUE_TEAMS.find(t => t.id === fixture.homeTeamId)!;
@@ -250,7 +287,51 @@ export const useGameStore = create<GameStore>()(
           .map(d => ({ ...d, matchdaysLeft: d.matchdaysLeft - 1 }))
           .filter(d => d.matchdaysLeft > 0);
 
-        const newBalance = balance + net + eventMoney + borderPayment;
+        const STAFF_COSTS_TABLE = {
+          fishChips:   [0, 250, 750, 1500],
+          fanShop:     [0, 250, 750, 1500],
+          ticketSales: [0, 250, 750, 1500],
+          cheerleader: [0, 5000, 10000, 20000],
+        };
+        const staffCost = (
+          STAFF_COSTS_TABLE.fishChips[staff.fishChips] +
+          STAFF_COSTS_TABLE.fanShop[staff.fanShop] +
+          STAFF_COSTS_TABLE.ticketSales[staff.ticketSales] +
+          STAFF_COSTS_TABLE.cheerleader[staff.cheerleader] +
+          (staff.coach > 0 ? 5000 : 0)
+        );
+
+        const newBalance = balance + net + eventMoney + borderPayment - staffCost;
+
+        let betResult = 0;
+        const betEntry: FinanceEntry[] = [];
+        if (pendingBet && lastMatch) {
+          const isHomeTeam = lastMatch.fixture.homeTeamId === managedTeamId;
+          const myGoals = isHomeTeam ? lastMatch.fixture.homeGoals! : lastMatch.fixture.awayGoals!;
+          const oppGoals = isHomeTeam ? lastMatch.fixture.awayGoals! : lastMatch.fixture.homeGoals!;
+          const won = myGoals > oppGoals;
+          betResult = won ? Math.round(pendingBet.amount * (pendingBet.winMultiplier - 1)) : -pendingBet.amount;
+          const balanceAfterBet = newBalance + betResult;
+          betEntry.push({
+            matchday: currentMatchday,
+            description: won ? `Bet won! (×${pendingBet.winMultiplier.toFixed(2)})` : 'Bet lost',
+            amount: betResult,
+            running: balanceAfterBet,
+          });
+        }
+
+        const staffEntry: FinanceEntry[] = staffCost > 0 ? [{
+          matchday: currentMatchday,
+          description: 'Personnel costs',
+          amount: -staffCost,
+          running: newBalance,
+        }] : [];
+
+        const finalBalance = newBalance + betResult;
+
+        const newEventLog = event
+          ? [...eventLog, { matchday: currentMatchday, text: event.text.replace(/X/g, lastMatch?.events?.find(e => e.type === 'goal')?.playerName ?? 'a player') }]
+          : eventLog;
 
         let adjustedTable = newTable;
         if (eventPoints !== 0) {
@@ -294,14 +375,16 @@ export const useGameStore = create<GameStore>()(
           table: adjustedTable,
           lastMatch,
           pendingEvent: event,
-          balance: newBalance,
-          financeHistory: [...financeHistory, ...entries],
+          balance: finalBalance,
+          financeHistory: [...financeHistory, ...entries, ...staffEntry, ...betEntry],
           currentMatchday: currentMatchday + 1,
           chairmanMessage: chairmanMsg(managerName, pos),
           rosters: newRosters,
           phase: 'result',
           transfersUsed: 0,
           borderSponsors: newBorderSponsors,
+          pendingBet: null,
+          eventLog: newEventLog,
         });
       },
 
@@ -412,12 +495,37 @@ export const useGameStore = create<GameStore>()(
         });
       },
 
+      bribeReferee: () => {
+        const { balance, financeHistory, currentMatchday } = get();
+        const cost = 100_000;
+        if (balance < cost) return;
+        set({
+          balance: balance - cost,
+          financeHistory: [...financeHistory, {
+            matchday: currentMatchday,
+            description: 'Referee bribe',
+            amount: -cost,
+            running: balance - cost,
+          }],
+        });
+      },
+
       dismissEvent: () => set({ pendingEvent: null }),
       setPhase: (phase) => set({ phase }),
       setPriceLevel: (priceLevel) => set({ priceLevel }),
       setFoodEnabled: (foodEnabled) => set({ foodEnabled }),
       setMerchandiseEnabled: (merchandiseEnabled) => set({ merchandiseEnabled }),
       resetGame: () => set({ phase: 'menu', managerName: '', managedTeamId: 1 }),
+      setStaff: (role, tier) => {
+        const { staff } = get();
+        set({ staff: { ...staff, [role]: tier } });
+      },
+      setCoach: (coachId) => {
+        const { staff } = get();
+        set({ staff: { ...staff, coach: coachId } });
+      },
+      placeBet: (amount, winMultiplier) => set({ pendingBet: { amount, winMultiplier } }),
+      cancelBet: () => set({ pendingBet: null }),
     }),
     { name: 'ifog-game-state' }
   )

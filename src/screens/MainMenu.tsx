@@ -8,67 +8,59 @@ export function MainMenu() {
   const hasGame = phase !== 'menu';
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden">
-      {/* Stadium background */}
-      <div className="absolute inset-0">
+    <div style={{ display: 'flex', height: '100vh', background: '#000' }}>
+
+      {/* Left: start screen image at natural proportions */}
+      <div style={{ flexShrink: 0, height: '100%', overflow: 'hidden' }}>
         <img
-          src={img('zuschau.png')}
+          src={img('startscreen.png')}
           alt=""
-          className="w-full h-full object-cover"
-          style={{ imageRendering: 'pixelated' }}
+          style={{ height: '100%', width: 'auto', display: 'block', imageRendering: 'pixelated' }}
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/70 via-black/60 to-black/80" />
       </div>
 
-      {/* Fans strip at bottom */}
-      <div className="absolute bottom-0 left-0 right-0 h-32 overflow-hidden opacity-40">
-        <img src={img('fans.png')} alt="" className="w-full object-cover" style={{ imageRendering: 'pixelated' }} />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" />
-      </div>
-
-      <div className="relative z-10 flex flex-col items-center text-center max-w-lg px-4">
-        <div className="mb-4 opacity-90">
-          <img src={img('ball.png')} alt="ball" className="w-16 h-16 mx-auto" style={{ imageRendering: 'pixelated' }} />
-        </div>
-
-        <h1 className="text-5xl sm:text-6xl font-extrabold text-white tracking-tight leading-tight drop-shadow-2xl">
+      {/* Right: black panel with buttons */}
+      <div style={{
+        flex: 1, background: '#000',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center',
+        gap: '14px', padding: '40px',
+      }}>
+        <h1 style={{ fontSize: '32px', fontWeight: 'extrabold', color: '#fff', textAlign: 'center', marginBottom: '12px', lineHeight: 1.3 }}>
           It's A Funny<br />
-          <span className="text-pitch-400">Old Game</span>
+          <span style={{ color: '#4ade80' }}>Old Game</span>
         </h1>
 
-        <p className="mt-3 text-slate-300 text-lg drop-shadow">
-          Football Club Management Simulation
-        </p>
+        <button
+          className="btn-primary shadow-lg"
+          style={{ fontSize: '18px', padding: '14px 0', width: '220px' }}
+          onClick={() => navigate('/select')}
+        >
+          New Game
+        </button>
 
-        <div className="mt-10 flex flex-col gap-3 w-full max-w-xs">
+        {hasGame && (
           <button
-            className="btn-primary py-3 text-base shadow-lg"
-            onClick={() => navigate('/select')}
+            className="btn-secondary"
+            style={{ fontSize: '18px', padding: '14px 0', width: '220px' }}
+            onClick={() => navigate('/season')}
           >
-            New Game
+            Continue Game
           </button>
+        )}
 
-          {hasGame && (
-            <button
-              className="btn-secondary py-3 text-base"
-              onClick={() => navigate('/season')}
-            >
-              Continue Game
-            </button>
-          )}
+        {hasGame && (
+          <button
+            className="btn-danger"
+            style={{ fontSize: '14px', padding: '10px 0', width: '220px', marginTop: '4px' }}
+            onClick={() => { resetGame(); navigate('/'); }}
+          >
+            Abandon Season
+          </button>
+        )}
 
-          {hasGame && (
-            <button
-              className="btn-danger py-3 text-sm mt-2"
-              onClick={() => { resetGame(); navigate('/'); }}
-            >
-              Abandon Season
-            </button>
-          )}
-        </div>
-
-        <p className="mt-12 text-slate-500 text-xs">
-          Inspired by the 1997 classic by 21st Century Entertainment
+        <p style={{ fontSize: '12px', color: '#475569', marginTop: '24px', textAlign: 'center' }}>
+          Inspired by the 1997 classic<br />by 21st Century Entertainment
         </p>
       </div>
     </div>

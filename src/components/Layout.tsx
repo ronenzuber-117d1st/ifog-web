@@ -50,7 +50,7 @@ export function Layout({ children }: Props) {
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
 
         {/* Main content area */}
-        <main style={{ flex: 1, overflowY: 'auto', background: '#0d1117', minWidth: 0 }}>
+        <main style={{ flex: 1, minHeight: 0, overflowY: 'auto', background: '#0d1117', minWidth: 0 }}>
           {children}
         </main>
 

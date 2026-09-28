@@ -7,8 +7,8 @@ type TrainingTab = 'massage' | 'skills' | 'shape';
 
 const TAB_IMAGES: Record<TrainingTab, [string, string, string]> = {
   massage: ['massage1.png', 'massage2.png', 'massage3.png'],
-  skills:  ['mittelf1.png', 'mittelf2.png', 'mittelf4.png'],
-  shape:   ['kondi1.png',   'kondi2.png',   'superm3.png'],
+  skills:  ['technik1.png', 'technik2.png', 'technik3.png'],
+  shape:   ['kondi1.png',   'kondi2.png',   'kondi3.png'],
 };
 
 function lvl(v: number): 0 | 1 | 2 {
