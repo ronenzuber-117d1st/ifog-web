@@ -85,12 +85,12 @@ export function Desk() {
         </div>
 
         {/* Tab bar */}
-        <div style={{ display: 'flex', padding: '10px 10px 0', gap: '4px', borderBottom: '1px solid #1e2535', flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', padding: '8px 10px 0', gap: '4px', borderBottom: '1px solid #1e2535' }}>
           {(Object.keys(TAB_LABELS) as DeskTab[]).map(t => {
             const active = tab === t;
             return (
               <button key={t} onClick={() => setTab(t)} style={{
-                padding: '6px 14px', fontSize: '11px',
+                padding: '8px 18px', fontSize: '13px',
                 fontWeight: active ? 'bold' : 'normal',
                 background: active ? '#161b27' : 'transparent',
                 cursor: 'pointer',
@@ -100,6 +100,7 @@ export function Desk() {
                 marginBottom: active ? '-1px' : '0',
                 position: 'relative', zIndex: active ? 1 : 0,
                 color: active ? '#ffffff' : '#64748b',
+                whiteSpace: 'nowrap',
               }}>
                 {TAB_LABELS[t]}
               </button>
@@ -184,46 +185,36 @@ export function Desk() {
                 </div>
               </div>
 
-              {/* Sub-tab rows */}
-              <div style={{ display: 'flex', gap: '4px', marginBottom: '4px' }}>
-                {(['fishchips', 'fanshop', 'ticketsales'] as PersonnelSub[]).map(sub => {
-                  const labels: Record<string, string> = { fishchips: 'Fish & Chips', fanshop: 'Fan Shop', ticketsales: 'Ticket Sales' };
-                  const active = personnelSub === sub;
-                  return (
-                    <button key={sub} onClick={() => setPersonnelSub(sub)} style={{
-                      flex: 1, padding: '6px 8px', fontSize: '11px', cursor: 'pointer',
-                      fontWeight: active ? 'bold' : 'normal',
-                      background: active ? '#161b27' : '#0d1117',
-                      border: `1px solid ${active ? '#28314a' : '#1e2535'}`,
-                      borderRadius: '6px 6px 0 0',
-                      color: active ? '#ffffff' : '#64748b',
-                    }}>{labels[sub]}</button>
-                  );
-                })}
-              </div>
-              <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
-                {(['cheerleader', 'coach'] as PersonnelSub[]).map(sub => {
-                  const labels: Record<string, string> = { cheerleader: 'Cheerleader', coach: 'Assistant Coach' };
-                  const active = personnelSub === sub;
-                  return (
-                    <button key={sub} onClick={() => setPersonnelSub(sub)} style={{
-                      flex: 1, padding: '6px 8px', fontSize: '11px', cursor: 'pointer',
-                      fontWeight: active ? 'bold' : 'normal',
-                      background: active ? '#161b27' : '#0d1117',
-                      border: `1px solid ${active ? '#28314a' : '#1e2535'}`,
-                      borderRadius: '6px 6px 0 0',
-                      color: active ? '#ffffff' : '#64748b',
-                    }}>{labels[sub]}</button>
-                  );
-                })}
-              </div>
+              {/* Sub-tab row (single row) */}
+              {(() => {
+                const allSubs: PersonnelSub[] = ['fishchips', 'fanshop', 'ticketsales', 'cheerleader', 'coach'];
+                const labels: Record<PersonnelSub, string> = { fishchips: 'Fish & Chips', fanshop: 'Fan Shop', ticketsales: 'Ticket Sales', cheerleader: 'Cheerleader', coach: 'Assistant Coach' };
+                return (
+                  <div style={{ display: 'flex', gap: '4px', marginBottom: '8px' }}>
+                    {allSubs.map(sub => {
+                      const active = personnelSub === sub;
+                      return (
+                        <button key={sub} onClick={() => setPersonnelSub(sub)} style={{
+                          flex: 1, padding: '8px 6px', fontSize: '13px', cursor: 'pointer',
+                          fontWeight: active ? 'bold' : 'normal',
+                          background: active ? '#161b27' : '#0d1117',
+                          border: `1px solid ${active ? '#3b82f6' : '#1e2535'}`,
+                          borderRadius: '6px 6px 0 0',
+                          color: active ? '#ffffff' : '#64748b',
+                          whiteSpace: 'nowrap',
+                        }}>{labels[sub]}</button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
 
               {/* Sub-tab content */}
               <div style={{ ...CARD, padding: '14px' }}>
                 {personnelSub === 'fishchips' && (
                   <StaffTierPanel
                     label="Fish & Chips"
-                    imageSrc={img(`pommes${staff.fishChips > 0 ? (staff.fishChips === 3 ? 2 : 1) : 0}.png`)}
+                    imageSrc={img(`pommes${staff.fishChips === 0 ? 0 : (staff.fishChips - 1) * 2 + 1 + (currentMatchday % 2)}.png`)}
                     currentTier={staff.fishChips}
                     costs={STAFF_COSTS.fishChips}
                     onSelect={tier => setStaff('fishChips', tier)}
@@ -232,7 +223,7 @@ export function Desk() {
                 {personnelSub === 'fanshop' && (
                   <StaffTierPanel
                     label="Fan Shop"
-                    imageSrc={img(`fanbude${staff.fanShop > 0 ? 1 : 0}.png`)}
+                    imageSrc={img(`fanbude${staff.fanShop === 0 ? 0 : (staff.fanShop - 1) * 2 + 1 + (currentMatchday % 2)}.png`)}
                     currentTier={staff.fanShop}
                     costs={STAFF_COSTS.fanShop}
                     onSelect={tier => setStaff('fanShop', tier)}

@@ -56,7 +56,7 @@ export function Layout({ children }: Props) {
 
         {/* Right navigation sidebar */}
         <nav style={{
-          width: '88px',
+          width: '120px',
           flexShrink: 0,
           background: '#0d1117',
           borderLeft: '1px solid #1e2535',
@@ -65,7 +65,7 @@ export function Layout({ children }: Props) {
           overflow: 'hidden',
         }}>
           {/* Scrollable nav items */}
-          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', padding: '6px 4px', gap: '4px' }}>
+          <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', padding: '8px 6px', gap: '4px' }}>
             {NAV.map(({ to, lines, color }) => {
               const active = location.pathname === to;
               return (
@@ -77,8 +77,8 @@ export function Layout({ children }: Props) {
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    padding: '8px 4px',
-                    minHeight: '44px',
+                    padding: '12px 6px',
+                    minHeight: '54px',
                     background: active ? '#161b27' : 'transparent',
                     border: '1px solid',
                     borderColor: active ? '#2d3a52' : 'transparent',
@@ -91,7 +91,7 @@ export function Layout({ children }: Props) {
                     <span key={i} style={{
                       color: active ? '#ffffff' : color,
                       fontWeight: 'bold',
-                      fontSize: '10px',
+                      fontSize: '14px',
                       lineHeight: '1.4',
                       letterSpacing: '0.04em',
                       textAlign: 'center',
@@ -106,11 +106,11 @@ export function Layout({ children }: Props) {
           </div>
 
           {/* Always-visible bottom: badge + exit */}
-          <div style={{ flexShrink: 0, padding: '4px', borderTop: '1px solid #1e2535' }}>
+          <div style={{ flexShrink: 0, padding: '6px', borderTop: '1px solid #1e2535' }}>
             <div style={{ textAlign: 'center', padding: '4px 0' }}>
               <img
                 src={img(`wappen${String(managedTeamId).padStart(2, '0')}.png`)}
-                style={{ width: '56px', height: '56px', imageRendering: 'pixelated', display: 'block', margin: '0 auto' }}
+                style={{ width: '72px', height: '72px', imageRendering: 'pixelated', display: 'block', margin: '0 auto' }}
                 alt=""
               />
             </div>
@@ -120,13 +120,13 @@ export function Layout({ children }: Props) {
                 background: '#1a0a0a',
                 border: '1px solid #4a1a1a',
                 color: '#f87171',
-                padding: '6px 4px',
+                padding: '8px 4px',
                 cursor: 'pointer',
                 borderRadius: '4px',
-                fontSize: '10px',
+                fontSize: '13px',
                 fontWeight: 'bold',
                 width: '100%',
-                marginTop: '4px',
+                marginTop: '6px',
               }}
             >
               EXIT GAME

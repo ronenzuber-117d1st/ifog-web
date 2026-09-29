@@ -14,6 +14,13 @@ export interface SponsorDeal {
   matchdaysLeft: number;
 }
 
+export interface MediaDeal {
+  name: string;
+  revenuePerMatch: number;
+  matchdays: number;
+  matchdaysLeft: number;
+}
+
 export interface StadiumState {
   pitch: number;      // 1-3
   seats: number;      // 1-3
@@ -72,6 +79,9 @@ export interface GameStore {
   pendingBet: { amount: number; winMultiplier: number } | null;
   eventLog: { matchday: number; text: string }[];
 
+  // Media
+  mediaDeal: MediaDeal | null;
+
   startNewGame: (managerName: string, teamId: number, portrait?: string, difficulty?: Difficulty) => void;
   playMatchday: () => void;
   setFormation: (f: Formation) => void;
@@ -93,6 +103,8 @@ export interface GameStore {
   setCoach: (coachId: number) => void;
   placeBet: (amount: number, winMultiplier: number) => void;
   cancelBet: () => void;
+  signMediaDeal: (deal: MediaDeal) => void;
+  cancelMediaDeal: () => void;
 }
 
 function makeTableRow(teamId: number): TableRow {
@@ -175,6 +187,7 @@ export const useGameStore = create<GameStore>()(
       staff: { fishChips: 0, fanShop: 0, ticketSales: 0, cheerleader: 0, coach: 0 },
       pendingBet: null,
       eventLog: [],
+      mediaDeal: null,
 
       startNewGame: (managerName, teamId, portrait, difficulty = 'intermediate') => {
         const rosters = getAllRosters();
@@ -217,12 +230,13 @@ export const useGameStore = create<GameStore>()(
           staff: { fishChips: 0, fanShop: 0, ticketSales: 0, cheerleader: 0, coach: 0 },
           pendingBet: null,
           eventLog: [],
+          mediaDeal: null,
         });
       },
 
       playMatchday: () => {
         const s = get();
-        const { currentMatchday, fixtures, rosters, managedTeamId, formation, table, balance, financeHistory, managerName, priceLevel, foodEnabled, merchandiseEnabled, trainingSkills, trainingShape, borderSponsors, stadium, difficulty, staff, pendingBet, eventLog } = s;
+        const { currentMatchday, fixtures, rosters, managedTeamId, formation, table, balance, financeHistory, managerName, priceLevel, foodEnabled, merchandiseEnabled, trainingSkills, trainingShape, borderSponsors, stadium, difficulty, staff, pendingBet, eventLog, mediaDeal } = s;
 
         const dayFixtures = fixtures.filter(f => f.matchday === currentMatchday && !f.homeGoals && f.homeGoals !== 0);
         if (dayFixtures.length === 0) return;
@@ -301,7 +315,13 @@ export const useGameStore = create<GameStore>()(
           (staff.coach > 0 ? 5000 : 0)
         );
 
-        const newBalance = balance + net + eventMoney + borderPayment - staffCost;
+        // Media deal: pays on home matches, ticks down every matchday
+        const mediaRevenue = (mediaDeal && isHomeMatch) ? mediaDeal.revenuePerMatch : 0;
+        const newMediaDeal = mediaDeal
+          ? (mediaDeal.matchdaysLeft <= 1 ? null : { ...mediaDeal, matchdaysLeft: mediaDeal.matchdaysLeft - 1 })
+          : null;
+
+        const newBalance = balance + net + eventMoney + borderPayment + mediaRevenue - staffCost;
 
         let betResult = 0;
         const betEntry: FinanceEntry[] = [];
@@ -362,6 +382,14 @@ export const useGameStore = create<GameStore>()(
             running: newBalance,
           });
         }
+        if (mediaRevenue > 0) {
+          entries.push({
+            matchday: currentMatchday,
+            description: `Media: ${mediaDeal!.name}`,
+            amount: mediaRevenue,
+            running: newBalance,
+          });
+        }
 
         const newRosters = { ...rosters };
         if (newRosters[managedTeamId]) {
@@ -385,6 +413,7 @@ export const useGameStore = create<GameStore>()(
           borderSponsors: newBorderSponsors,
           pendingBet: null,
           eventLog: newEventLog,
+          mediaDeal: newMediaDeal,
         });
       },
 
@@ -526,6 +555,8 @@ export const useGameStore = create<GameStore>()(
       },
       placeBet: (amount, winMultiplier) => set({ pendingBet: { amount, winMultiplier } }),
       cancelBet: () => set({ pendingBet: null }),
+      signMediaDeal: (deal) => set({ mediaDeal: deal }),
+      cancelMediaDeal: () => set({ mediaDeal: null }),
     }),
     { name: 'ifog-game-state' }
   )
