@@ -4,7 +4,6 @@ import { useGameStore } from '../store/useGameStore';
 import type { Difficulty } from '../store/useGameStore';
 import { LEAGUE_TEAMS } from '../data/teams';
 import { Badge } from '../components/Badge';
-import { ArrowLeft } from 'lucide-react';
 import { img } from '../utils/images';
 
 type Step = 'difficulty' | 'team' | 'portrait' | 'name';
@@ -14,30 +13,37 @@ const FEMALE_PORTRAITS = ['manag6', 'manak2', 'manak4'];
 const N    = LEAGUE_TEAMS.length;
 const HALF = Math.floor(N / 2);
 
-// Per-slot coverflow geometry (index = |distance from center|, capped at 3)
-const SLOT_TX      = [0,   210,  370,  490 ];  // translateX (px)
-const SLOT_RY      = [0,   48,   63,   72  ];  // rotateY (deg)
+const SLOT_TX      = [0,   210,  370,  490];
+const SLOT_RY      = [0,   48,   63,   72 ];
 const SLOT_SCALE   = [1.0, 0.82, 0.64, 0.55];
-const SLOT_OPACITY = [1.0, 0.72, 0.42, 0.0 ];
-const SLOT_Z       = [10,  8,    6,    4   ];
+const SLOT_OPACITY = [1.0, 0.72, 0.42, 0.0];
+const SLOT_Z       = [10,  8,    6,    4  ];
 
 function slotStyle(dist: number) {
   const d   = Math.min(Math.abs(dist), 3);
   const sgn = dist < 0 ? -1 : 1;
-  return {
-    tx:      sgn * SLOT_TX[d],
-    ry:     -sgn * SLOT_RY[d],
-    scale:   SLOT_SCALE[d],
-    opacity: SLOT_OPACITY[d],
-    zIndex:  SLOT_Z[d],
-  };
+  return { tx: sgn * SLOT_TX[d], ry: -sgn * SLOT_RY[d], scale: SLOT_SCALE[d], opacity: SLOT_OPACITY[d], zIndex: SLOT_Z[d] };
 }
 
 const DIFFICULTY_OPTIONS: { key: Difficulty; label: string; img: string; balance: string; desc: string; color: string }[] = [
-  { key: 'beginner',     label: 'BEGINNER',     img: 'mannsch1.png', balance: '£3,000,000', desc: "More funds, easier opponents. Perfect if you're new to the dugout.", color: '#4ade80' },
-  { key: 'intermediate', label: 'INTERMEDIATE', img: 'mannsch2.png', balance: '£2,000,000', desc: 'The classic experience. Balanced challenge for seasoned managers.',   color: '#60a5fa' },
-  { key: 'expert',       label: 'EXPERT',       img: 'mannsch3.png', balance: '£750,000',   desc: 'Tough opponents, tight budget. Only the best survive.',                color: '#f87171' },
+  { key: 'beginner',     label: 'Beginner',     img: 'mannsch1.png', balance: '£3,000,000', desc: "More funds, easier opponents.", color: '#4ade80' },
+  { key: 'intermediate', label: 'Intermediate', img: 'mannsch2.png', balance: '£2,000,000', desc: 'Balanced challenge for seasoned managers.',   color: '#60a5fa' },
+  { key: 'expert',       label: 'Expert',       img: 'mannsch3.png', balance: '£750,000',   desc: 'Tight budget. Only the best survive.',       color: '#f87171' },
 ];
+
+const STEPS: Step[] = ['difficulty', 'team', 'portrait', 'name'];
+const STEP_LABELS: Record<Step, string> = { difficulty: 'Level', team: 'Club', portrait: 'Manager', name: 'Name' };
+
+const BTN_PRIMARY: React.CSSProperties = {
+  height: 44, padding: '0 22px', borderRadius: 10, border: 0,
+  background: '#c8f53d', color: '#070b16',
+  fontFamily: "'Big Shoulders Display', Impact, sans-serif",
+  fontWeight: 800, fontSize: 15, letterSpacing: '0.06em', textTransform: 'uppercase',
+  cursor: 'pointer', whiteSpace: 'nowrap',
+};
+const BTN_PRIMARY_DISABLED: React.CSSProperties = {
+  ...BTN_PRIMARY, background: '#2a3656', color: '#4b5675', cursor: 'default',
+};
 
 export function TeamSelect() {
   const navigate = useNavigate();
@@ -51,6 +57,7 @@ export function TeamSelect() {
 
   const selectedTeam = LEAGUE_TEAMS[centerIdx];
   const go = (dir: 1 | -1) => setCenterIdx(i => ((i + dir) % N + N) % N);
+  const currentStepIdx = STEPS.indexOf(step);
 
   const handleStart = () => {
     if (!managerName.trim() || !difficulty) return;
@@ -65,188 +72,232 @@ export function TeamSelect() {
     else navigate('/');
   };
 
-  const STEPS: Step[] = ['difficulty', 'team', 'portrait', 'name'];
-  const STEP_LABELS: Record<Step, string> = { difficulty: 'Level', team: 'Club', portrait: 'Manager', name: 'Name' };
-  const currentStepIdx = STEPS.indexOf(step);
-
   return (
-    <div className="min-h-screen bg-surface-950 p-4 sm:p-8">
-      <div className="max-w-5xl mx-auto">
+    <div style={{ display: 'flex', height: '100vh', background: '#070b16', overflow: 'hidden', fontFamily: "'Barlow', system-ui, sans-serif", color: '#e8edf7' }}>
 
-        <button
-          className="flex items-center gap-2 text-slate-400 hover:text-white mb-6 transition-colors"
-          style={{ fontSize: '15px' }}
-          onClick={handleBack}
-        >
-          <ArrowLeft size={18} /> Back
-        </button>
+      {/* ── Left: map ── */}
+      <div style={{ position: 'relative', flexShrink: 0, height: '100%', overflow: 'hidden' }}>
+        <img src="/images/mainmenu.jpg" alt="" style={{ height: '100%', width: 'auto', display: 'block' }} />
+        <div style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: 160, background: 'linear-gradient(90deg, transparent, #070b16)' }} />
+      </div>
 
-        {/* Progress indicator */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '28px' }}>
-          {STEPS.map((s, i) => {
-            const done = i < currentStepIdx, active = step === s;
-            return (
-              <div key={s} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: active ? '#fff' : done ? '#4ade80' : '#64748b', fontSize: '14px', fontWeight: active ? 'bold' : 'normal' }}>
-                  <div style={{ width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: active ? '#1e40af' : done ? '#15803d' : '#1e2535', fontSize: '12px', fontWeight: 'bold', color: '#fff' }}>
-                    {done ? '✓' : i + 1}
+      {/* ── Right: content ── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', position: 'relative' }}>
+
+        {/* Background glow */}
+        <div style={{ position: 'absolute', right: -160, top: -200, width: 560, height: 560, borderRadius: '50%', background: 'radial-gradient(circle, rgba(200,245,61,0.08), transparent 65%)', pointerEvents: 'none' }} />
+
+        {/* Header: back + progress */}
+        <div style={{ flexShrink: 0, padding: '20px 40px 16px', display: 'flex', alignItems: 'center', gap: 24, borderBottom: '1px solid #1c2640' }}>
+          <button
+            onClick={handleBack}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'transparent', border: 'none', color: '#8d99b5', fontSize: 14, fontWeight: 600, cursor: 'pointer', padding: '6px 0', fontFamily: "'Barlow', system-ui, sans-serif", flexShrink: 0 }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/></svg>
+            Back
+          </button>
+
+          {/* Step progress */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+            {STEPS.map((s, i) => {
+              const done = i < currentStepIdx, active = step === s;
+              return (
+                <div key={s} style={{ display: 'flex', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                    <div style={{
+                      width: 22, height: 22, borderRadius: '50%', fontSize: 11, fontWeight: 700,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: active ? '#c8f53d' : done ? 'rgba(200,245,61,0.2)' : '#1c2640',
+                      color: active ? '#070b16' : done ? '#c8f53d' : '#8d99b5',
+                    }}>
+                      {done ? '✓' : i + 1}
+                    </div>
+                    <span style={{ fontSize: 13, fontWeight: active ? 700 : 500, color: active ? '#ffffff' : done ? '#c8f53d' : '#8d99b5' }}>
+                      {STEP_LABELS[s]}
+                    </span>
                   </div>
-                  {STEP_LABELS[s]}
+                  {i < STEPS.length - 1 && (
+                    <div style={{ width: 28, height: 1, background: i < currentStepIdx ? '#c8f53d44' : '#1c2640', margin: '0 10px' }} />
+                  )}
                 </div>
-                {i < STEPS.length - 1 && <div style={{ width: '28px', height: '1px', background: '#1e2535', marginLeft: '2px' }} />}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
 
-        {/* ── DIFFICULTY ── */}
-        {step === 'difficulty' && (
-          <>
-            <h2 style={{ fontSize: '28px', fontWeight: 'bold', color: '#fff', marginBottom: '6px' }}>Choose Your Level</h2>
-            <p style={{ fontSize: '16px', color: '#94a3b8', marginBottom: '24px' }}>This affects your starting budget and opponent strength.</p>
-            <div style={{ display: 'flex', gap: '14px' }}>
-              {DIFFICULTY_OPTIONS.map(opt => {
-                const selected = difficulty === opt.key;
-                return (
-                  <button key={opt.key} onClick={() => setDifficulty(opt.key)} style={{ flex: 1, background: selected ? `${opt.color}12` : '#161b27', border: `2px solid ${selected ? opt.color : '#28314a'}`, borderRadius: '12px', padding: 0, cursor: 'pointer', transition: 'border-color 0.15s, background 0.15s', boxShadow: selected ? `0 0 20px ${opt.color}44` : 'none', overflow: 'hidden', textAlign: 'left' }}>
-                    <div style={{ background: '#0d1117' }}>
-                      <img src={img(opt.img)} style={{ width: '100%', height: 'auto', display: 'block', imageRendering: 'pixelated' }} alt={opt.label} />
-                    </div>
-                    <div style={{ padding: '14px' }}>
-                      <div style={{ fontSize: '13px', fontWeight: 'bold', letterSpacing: '2px', color: opt.color, marginBottom: '6px' }}>{opt.label}</div>
-                      <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#fff', marginBottom: '8px' }}>{opt.balance}</div>
-                      <div style={{ fontSize: '13px', color: '#94a3b8', lineHeight: 1.5 }}>{opt.desc}</div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-            <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end' }}>
-              <button className="btn-primary" style={{ fontSize: '15px', padding: '10px 22px' }} disabled={!difficulty} onClick={() => { if (difficulty) setStep('team'); }}>
-                Next: Choose Club →
-              </button>
-            </div>
-          </>
-        )}
+        {/* Content area */}
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '16px 40px 20px', overflow: 'hidden' }}>
 
-        {/* ── TEAM COVERFLOW ── */}
-        {step === 'team' && (
-          <>
-            <h2 style={{ fontSize: '28px', fontWeight: 'bold', color: '#fff', marginBottom: '6px' }}>Choose Your Club</h2>
-            <p style={{ fontSize: '16px', color: '#94a3b8', marginBottom: '24px' }}>Browse all {N} clubs — click a card to select it.</p>
-
-            {/* Coverflow stage */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-
-              <button onClick={() => go(-1)} style={{ flexShrink: 0, width: '52px', height: '52px', borderRadius: '50%', background: '#161b27', border: '2px solid #28314a', color: '#cbd5e1', fontSize: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                ‹
-              </button>
-
-              {/* Overflow clip */}
-              <div style={{ flex: 1, overflow: 'hidden' }}>
-                {/* Relative stage — height matches card */}
-                <div style={{ position: 'relative', height: '240px' }}>
-                  {LEAGUE_TEAMS.map((team, i) => {
-                    const raw  = i - centerIdx;
-                    const dist = (((raw % N) + N + HALF) % N) - HALF;
-                    const absD = Math.abs(dist);
-                    if (absD > 3) return null;
-
-                    const { tx, ry, scale, opacity, zIndex } = slotStyle(dist);
-                    const isCenter = dist === 0;
-
-                    return (
-                      <div
-                        key={team.id}
-                        onClick={() => !isCenter && setCenterIdx(i)}
-                        style={{
-                          position: 'absolute',
-                          top: 0,
-                          left: '50%',
-                          marginLeft: '-120px',   // half of 240px card width
-                          width: '240px',
-                          transform: `perspective(900px) translateX(${tx}px) rotateY(${ry}deg) scale(${scale})`,
-                          opacity,
-                          zIndex,
-                          transition: 'transform 0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.42s ease',
-                          cursor: isCenter ? 'default' : 'pointer',
-                          pointerEvents: absD > 2 ? 'none' : 'auto',
-                        }}
-                      >
-                        <TeamCoverCard team={team} active={isCenter} />
+          {/* ── DIFFICULTY ── */}
+          {step === 'difficulty' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%', justifyContent: 'center' }}>
+              <div>
+                <h2 style={{ margin: 0, fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 900, fontSize: 36, letterSpacing: '0.02em', color: '#fff' }}>Choose Your Level</h2>
+                <p style={{ margin: '4px 0 0', fontSize: 14, color: '#8d99b5' }}>This affects your starting budget and opponent strength.</p>
+              </div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                {DIFFICULTY_OPTIONS.map(opt => {
+                  const selected = difficulty === opt.key;
+                  return (
+                    <button
+                      key={opt.key}
+                      onClick={() => setDifficulty(opt.key)}
+                      style={{
+                        flex: 1, background: selected ? `${opt.color}10` : '#0f1628',
+                        border: `2px solid ${selected ? opt.color : '#1c2640'}`,
+                        borderRadius: 14, padding: 0, cursor: 'pointer',
+                        boxShadow: selected ? `0 0 24px ${opt.color}33` : 'none',
+                        overflow: 'hidden', textAlign: 'left',
+                        transition: 'border-color 0.15s, background 0.15s',
+                      }}
+                    >
+                      <div style={{ height: 240, background: '#070b16', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <img src={img(opt.img)} style={{ width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated', display: 'block' }} alt={opt.label} />
                       </div>
-                    );
-                  })}
+                      <div style={{ padding: '12px 14px' }}>
+                        <div style={{ fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 800, fontSize: 14, letterSpacing: '0.14em', textTransform: 'uppercase', color: opt.color, marginBottom: 4 }}>{opt.label}</div>
+                        <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 18, color: '#fff', marginBottom: 6 }}>{opt.balance}</div>
+                        <div style={{ fontSize: 12, color: '#8d99b5', lineHeight: 1.5 }}>{opt.desc}</div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  style={difficulty ? BTN_PRIMARY : BTN_PRIMARY_DISABLED}
+                  disabled={!difficulty}
+                  onClick={() => { if (difficulty) setStep('team'); }}
+                >
+                  Next: Choose Club →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── TEAM COVERFLOW ── */}
+          {step === 'team' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, height: '100%', justifyContent: 'center' }}>
+              <div>
+                <h2 style={{ margin: 0, fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 900, fontSize: 36, letterSpacing: '0.02em', color: '#fff' }}>Choose Your Club</h2>
+                <p style={{ margin: '4px 0 0', fontSize: 14, color: '#8d99b5' }}>Browse all {N} clubs.</p>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <button onClick={() => go(-1)} style={{ flexShrink: 0, width: 44, height: 44, borderRadius: '50%', background: '#0f1628', border: '1px solid #1c2640', color: '#cbd5e1', fontSize: 24, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>‹</button>
+
+                <div style={{ flex: 1, overflow: 'hidden' }}>
+                  <div style={{ position: 'relative', height: 220 }}>
+                    {LEAGUE_TEAMS.map((team, i) => {
+                      const raw  = i - centerIdx;
+                      const dist = (((raw % N) + N + HALF) % N) - HALF;
+                      const absD = Math.abs(dist);
+                      if (absD > 3) return null;
+                      const { tx, ry, scale, opacity, zIndex } = slotStyle(dist);
+                      const isCenter = dist === 0;
+                      return (
+                        <div
+                          key={team.id}
+                          onClick={() => !isCenter && setCenterIdx(i)}
+                          style={{
+                            position: 'absolute', top: 0, left: '50%', marginLeft: '-110px',
+                            width: 220,
+                            transform: `perspective(900px) translateX(${tx}px) rotateY(${ry}deg) scale(${scale})`,
+                            opacity, zIndex,
+                            transition: 'transform 0.42s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 0.42s ease',
+                            cursor: isCenter ? 'default' : 'pointer',
+                            pointerEvents: absD > 2 ? 'none' : 'auto',
+                          }}
+                        >
+                          <TeamCoverCard team={team} active={isCenter} />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <button onClick={() => go(1)} style={{ flexShrink: 0, width: 44, height: 44, borderRadius: '50%', background: '#0f1628', border: '1px solid #1c2640', color: '#cbd5e1', fontSize: 24, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>›</button>
+              </div>
+
+              {/* Dots */}
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 5 }}>
+                {LEAGUE_TEAMS.map((_, i) => (
+                  <button key={i} onClick={() => setCenterIdx(i)} style={{ width: i === centerIdx ? 18 : 6, height: 6, borderRadius: 3, border: 'none', padding: 0, cursor: 'pointer', background: i === centerIdx ? '#c8f53d' : '#1c2640', transition: 'width 0.2s ease, background 0.2s ease' }} />
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 13, color: '#8d99b5' }}>{centerIdx + 1} of {N}</span>
+                <button style={BTN_PRIMARY} onClick={() => { setSelectedPortrait(`manag${((selectedTeam.id - 1) % 5) + 1}`); setStep('portrait'); }}>
+                  Select {selectedTeam.name} →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── PORTRAIT ── */}
+          {step === 'portrait' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%', justifyContent: 'center' }}>
+              <div>
+                <h2 style={{ margin: 0, fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 900, fontSize: 36, letterSpacing: '0.02em', color: '#fff' }}>Choose Your Manager</h2>
+                <p style={{ margin: '4px 0 0', fontSize: 14, color: '#8d99b5' }}>Who's in the dugout?</p>
+              </div>
+
+              <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+                <div>
+                  <div style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#8d99b5', marginBottom: 10 }}>Male Managers</div>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    {MALE_PORTRAITS.map(p => <PortraitCard key={p} portraitKey={p} selected={selectedPortrait === p} onSelect={setSelectedPortrait} />)}
+                  </div>
+                </div>
+                <div style={{ width: 1, background: '#1c2640', alignSelf: 'stretch', marginTop: 24 }} />
+                <div>
+                  <div style={{ fontSize: 10, letterSpacing: '0.14em', textTransform: 'uppercase', color: '#8d99b5', marginBottom: 10 }}>Female Managers</div>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    {FEMALE_PORTRAITS.map(p => <PortraitCard key={p} portraitKey={p} selected={selectedPortrait === p} onSelect={setSelectedPortrait} />)}
+                  </div>
                 </div>
               </div>
 
-              <button onClick={() => go(1)} style={{ flexShrink: 0, width: '52px', height: '52px', borderRadius: '50%', background: '#161b27', border: '2px solid #28314a', color: '#cbd5e1', fontSize: '28px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                ›
-              </button>
-            </div>
-
-            {/* Dots */}
-            <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', marginTop: '16px' }}>
-              {LEAGUE_TEAMS.map((_, i) => (
-                <button key={i} onClick={() => setCenterIdx(i)} style={{ width: i === centerIdx ? '20px' : '8px', height: '8px', borderRadius: '4px', border: 'none', padding: 0, cursor: 'pointer', background: i === centerIdx ? '#3b82f6' : '#1e2535', transition: 'width 0.2s ease, background 0.2s ease' }} />
-              ))}
-            </div>
-
-            <div style={{ marginTop: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '14px', color: '#64748b' }}>{centerIdx + 1} of {N}</span>
-              <button className="btn-primary" style={{ fontSize: '15px', padding: '10px 22px' }} onClick={() => { setSelectedPortrait(`manag${((selectedTeam.id - 1) % 5) + 1}`); setStep('portrait'); }}>
-                Select {selectedTeam.name} →
-              </button>
-            </div>
-          </>
-        )}
-
-        {/* ── PORTRAIT ── */}
-        {step === 'portrait' && (
-          <>
-            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: '24px' }}>
-              <div>
-                <h2 style={{ fontSize: '28px', fontWeight: 'bold', color: '#fff', marginBottom: '6px' }}>Choose Your Manager</h2>
-                <p style={{ fontSize: '16px', color: '#94a3b8' }}>Who's in the dugout?</p>
-              </div>
-              <button className="btn-primary" style={{ fontSize: '15px', padding: '10px 22px', flexShrink: 0 }} onClick={() => setStep('name')}>
-                Next: Enter Name →
-              </button>
-            </div>
-            <div style={{ display: 'flex', gap: '28px', alignItems: 'flex-start' }}>
-              <div>
-                <div style={{ color: '#94a3b8', fontSize: '13px', marginBottom: '12px', letterSpacing: '1px' }}>MALE MANAGERS</div>
-                <div style={{ display: 'flex', gap: '12px' }}>
-                  {MALE_PORTRAITS.map(p => <PortraitCard key={p} portraitKey={p} selected={selectedPortrait === p} onSelect={setSelectedPortrait} />)}
-                </div>
-              </div>
-              <div style={{ width: '1px', background: '#1e2535', alignSelf: 'stretch', marginTop: '28px' }} />
-              <div>
-                <div style={{ color: '#94a3b8', fontSize: '13px', marginBottom: '12px', letterSpacing: '1px' }}>FEMALE MANAGERS</div>
-                <div style={{ display: 'flex', gap: '12px' }}>
-                  {FEMALE_PORTRAITS.map(p => <PortraitCard key={p} portraitKey={p} selected={selectedPortrait === p} onSelect={setSelectedPortrait} />)}
-                </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 16 }}>
+                <button style={BTN_PRIMARY} onClick={() => setStep('name')}>Next: Enter Name →</button>
               </div>
             </div>
-          </>
-        )}
+          )}
 
-        {/* ── NAME ── */}
-        {step === 'name' && (
-          <div style={{ maxWidth: '360px', margin: '0 auto', textAlign: 'center' }}>
-            <div style={{ width: '130px', height: '130px', margin: '0 auto 18px', borderRadius: '14px', overflow: 'hidden', border: '2px solid #3b82f6', background: '#1a1a3a' }}>
-              <img src={img(`${selectedPortrait}_1.png`)} style={{ width: '100%', height: '100%', objectFit: 'cover', imageRendering: 'pixelated' }} alt="" />
+          {/* ── NAME ── */}
+          {step === 'name' && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, height: '100%' }}>
+              <div style={{ width: 110, height: 110, borderRadius: 14, overflow: 'hidden', border: '2px solid #1c2640', background: '#0f1628' }}>
+                <img src={img(`${selectedPortrait}_1.png`)} style={{ width: '100%', height: '100%', objectFit: 'cover', imageRendering: 'pixelated' }} alt="" />
+              </div>
+              <Badge team={selectedTeam} size="xl" />
+              <h2 style={{ margin: 0, fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 900, fontSize: 30, color: '#fff', letterSpacing: '0.02em' }}>{selectedTeam.name}</h2>
+              <p style={{ margin: 0, fontSize: 14, color: '#8d99b5' }}>Enter your name as the new manager.</p>
+              <input
+                type="text"
+                placeholder="Your name"
+                value={managerName}
+                maxLength={24}
+                onChange={e => setManagerName(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleStart()}
+                style={{
+                  width: 300, padding: '11px 16px', background: '#0f1628', border: '1px solid #1c2640',
+                  borderRadius: 10, color: '#ffffff', fontSize: 17, textAlign: 'center',
+                  outline: 'none', fontFamily: "'Barlow', system-ui, sans-serif",
+                }}
+              />
+              <button
+                style={managerName.trim() ? BTN_PRIMARY : BTN_PRIMARY_DISABLED}
+                disabled={!managerName.trim()}
+                onClick={handleStart}
+              >
+                Start Season →
+              </button>
             </div>
-            <Badge team={selectedTeam} size="xl" />
-            <h2 style={{ fontSize: '26px', fontWeight: 'bold', color: '#fff', marginTop: '16px', marginBottom: '6px' }}>{selectedTeam.name}</h2>
-            <p style={{ fontSize: '15px', color: '#94a3b8', marginBottom: '28px' }}>Enter your name as the new manager.</p>
-            <input type="text" placeholder="Your name" value={managerName} maxLength={24} onChange={e => setManagerName(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleStart()} className="w-full bg-surface-800 border border-surface-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:border-pitch-500 text-center" style={{ fontSize: '18px' }} />
-            <button className="btn-primary w-full mt-4" style={{ fontSize: '16px', padding: '12px' }} disabled={!managerName.trim()} onClick={handleStart}>
-              Start Season 🏆
-            </button>
-          </div>
-        )}
+          )}
 
+        </div>
       </div>
     </div>
   );
@@ -256,27 +307,24 @@ function TeamCoverCard({ team, active }: { team: typeof LEAGUE_TEAMS[0]; active:
   const strength = Math.round(((team.baseSkill - 40) / 40) * 100);
   return (
     <div style={{
-      width: '240px', height: '240px',
-      background: active ? '#1a2035' : '#111827',
-      border: `2px solid ${active ? '#3b82f6' : '#1e2535'}`,
-      borderRadius: '16px',
-      padding: '22px 20px',
-      textAlign: 'center',
-      boxShadow: active ? '0 8px 32px rgba(59,130,246,0.35), 0 2px 8px rgba(0,0,0,0.6)' : '0 4px 16px rgba(0,0,0,0.5)',
+      width: 220, height: 220,
+      background: active ? '#0f1628' : '#0a0e1a',
+      border: `2px solid ${active ? '#c8f53d' : '#1c2640'}`,
+      borderRadius: 16, padding: '18px 16px', textAlign: 'center',
+      boxShadow: active ? '0 8px 32px rgba(200,245,61,0.18), 0 2px 8px rgba(0,0,0,0.6)' : '0 4px 16px rgba(0,0,0,0.5)',
       display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between',
+      fontFamily: "'Barlow', system-ui, sans-serif",
     }}>
       <div style={{ display: 'flex', justifyContent: 'center' }}>
         <Badge team={team} size="xl" />
       </div>
-      <div>
-        <div style={{ fontSize: active ? '17px' : '15px', fontWeight: 'bold', color: active ? '#fff' : '#94a3b8', marginBottom: '4px', lineHeight: 1.3 }}>
-          {team.name}
+      <div style={{ width: '100%' }}>
+        <div style={{ fontSize: active ? 16 : 14, fontWeight: 700, color: active ? '#fff' : '#8d99b5', marginBottom: 2, lineHeight: 1.3 }}>{team.name}</div>
+        <div style={{ fontSize: 11, color: '#4b5675', marginBottom: 10 }}>{team.managerName}</div>
+        <div style={{ height: 5, borderRadius: 3, background: '#1c2640', overflow: 'hidden', marginBottom: 3 }}>
+          <div style={{ height: '100%', width: `${strength}%`, background: active ? '#c8f53d' : '#3a4768', borderRadius: 3 }} />
         </div>
-        <div style={{ fontSize: '12px', color: '#475569', marginBottom: '14px' }}>{team.managerName}</div>
-        <div style={{ height: '6px', borderRadius: '3px', background: '#0d1117', overflow: 'hidden', marginBottom: '4px' }}>
-          <div style={{ height: '100%', width: `${strength}%`, background: 'linear-gradient(to right, #15803d, #4ade80)', borderRadius: '3px' }} />
-        </div>
-        <div style={{ fontSize: '11px', color: active ? '#4ade80' : '#475569' }}>Strength {strength}%</div>
+        <div style={{ fontSize: 10, color: active ? '#c8f53d' : '#4b5675', letterSpacing: '0.08em' }}>Strength {strength}%</div>
       </div>
     </div>
   );
@@ -284,7 +332,16 @@ function TeamCoverCard({ team, active }: { team: typeof LEAGUE_TEAMS[0]; active:
 
 function PortraitCard({ portraitKey, selected, onSelect }: { portraitKey: string; selected: boolean; onSelect: (k: string) => void }) {
   return (
-    <button onClick={() => onSelect(portraitKey)} style={{ width: '120px', height: '120px', borderRadius: '12px', overflow: 'hidden', padding: 0, border: `2px solid ${selected ? '#3b82f6' : '#1e2535'}`, background: '#1a1a3a', cursor: 'pointer', boxShadow: selected ? '0 0 18px #3b82f688' : 'none', transition: 'border-color 0.15s, box-shadow 0.15s' }}>
+    <button
+      onClick={() => onSelect(portraitKey)}
+      style={{
+        width: 100, height: 100, borderRadius: 12, overflow: 'hidden', padding: 0,
+        border: `2px solid ${selected ? '#c8f53d' : '#1c2640'}`,
+        background: '#0f1628', cursor: 'pointer',
+        boxShadow: selected ? '0 0 16px rgba(200,245,61,0.35)' : 'none',
+        transition: 'border-color 0.15s, box-shadow 0.15s',
+      }}
+    >
       <img src={img(`${portraitKey}_1.png`)} style={{ width: '100%', height: '100%', objectFit: 'cover', imageRendering: 'pixelated', display: 'block' }} alt={portraitKey} />
     </button>
   );

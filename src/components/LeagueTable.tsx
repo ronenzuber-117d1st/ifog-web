@@ -12,18 +12,18 @@ export function LeagueTable({ table, managedTeamId, compact }: Props) {
   const rows = compact ? table.slice(0, 10) : table;
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse', fontFamily: "'Barlow', system-ui, sans-serif" }}>
         <thead>
-          <tr className="text-slate-400 text-xs uppercase tracking-wider">
-            <th className="text-left pb-2 pl-2 w-8">#</th>
-            <th className="text-left pb-2">Team</th>
-            <th className="pb-2 text-right">P</th>
-            <th className="pb-2 text-right">W</th>
-            <th className="pb-2 text-right">D</th>
-            <th className="pb-2 text-right">L</th>
-            <th className="pb-2 text-right">GD</th>
-            <th className="pb-2 text-right pr-2">Pts</th>
+          <tr style={{ color: '#8d99b5', fontSize: 10, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
+            <th style={{ textAlign: 'left', paddingBottom: 8, paddingLeft: 6, width: 28 }}>#</th>
+            <th style={{ textAlign: 'left', paddingBottom: 8 }}>Team</th>
+            <th style={{ textAlign: 'right', paddingBottom: 8 }}>P</th>
+            <th style={{ textAlign: 'right', paddingBottom: 8 }}>W</th>
+            <th style={{ textAlign: 'right', paddingBottom: 8 }}>D</th>
+            <th style={{ textAlign: 'right', paddingBottom: 8 }}>L</th>
+            <th style={{ textAlign: 'right', paddingBottom: 8 }}>GD</th>
+            <th style={{ textAlign: 'right', paddingBottom: 8, paddingRight: 6 }}>Pts</th>
           </tr>
         </thead>
         <tbody>
@@ -35,26 +35,29 @@ export function LeagueTable({ table, managedTeamId, compact }: Props) {
             return (
               <tr
                 key={row.teamId}
-                className={`border-t border-surface-700 ${isManaged ? 'bg-pitch-600/10' : 'hover:bg-surface-700/50'} transition-colors`}
+                style={{
+                  borderTop: '1px solid #1c2640',
+                  background: isManaged ? 'rgba(200,245,61,0.06)' : 'transparent',
+                }}
               >
-                <td className="py-2.5 pl-2 text-slate-400 font-mono w-8">{i + 1}</td>
-                <td className="py-2.5">
-                  <div className="flex items-center gap-2.5">
+                <td style={{ padding: '7px 0 7px 6px', color: '#8d99b5', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, width: 28 }}>{i + 1}</td>
+                <td style={{ padding: '7px 0' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <Badge team={team} size="sm" />
-                    <span className={`font-medium ${isManaged ? 'text-pitch-400' : 'text-slate-200'}`}>
+                    <span style={{ fontWeight: 500, color: isManaged ? '#c8f53d' : '#e8edf7' }}>
                       {team.name}
-                      {isManaged && <span className="ml-1.5 text-xs text-pitch-500">(You)</span>}
+                      {isManaged && <span style={{ marginLeft: 6, fontSize: 10, color: '#8d99b5' }}>(You)</span>}
                     </span>
                   </div>
                 </td>
-                <td className="py-2.5 text-right text-slate-300">{row.played}</td>
-                <td className="py-2.5 text-right text-slate-300">{row.won}</td>
-                <td className="py-2.5 text-right text-slate-300">{row.drawn}</td>
-                <td className="py-2.5 text-right text-slate-300">{row.lost}</td>
-                <td className={`py-2.5 text-right ${gd > 0 ? 'text-pitch-400' : gd < 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                <td style={{ padding: '7px 0', textAlign: 'right', color: '#94a3b8' }}>{row.played}</td>
+                <td style={{ padding: '7px 0', textAlign: 'right', color: '#94a3b8' }}>{row.won}</td>
+                <td style={{ padding: '7px 0', textAlign: 'right', color: '#94a3b8' }}>{row.drawn}</td>
+                <td style={{ padding: '7px 0', textAlign: 'right', color: '#94a3b8' }}>{row.lost}</td>
+                <td style={{ padding: '7px 0', textAlign: 'right', color: gd > 0 ? '#c8f53d' : gd < 0 ? '#f87171' : '#8d99b5' }}>
                   {gd > 0 ? `+${gd}` : gd}
                 </td>
-                <td className="py-2.5 text-right pr-2 font-bold text-white">{row.points}</td>
+                <td style={{ padding: '7px 6px 7px 0', textAlign: 'right', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: '#ffffff', fontSize: 13 }}>{row.points}</td>
               </tr>
             );
           })}

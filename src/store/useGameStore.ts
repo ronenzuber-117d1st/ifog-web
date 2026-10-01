@@ -1,6 +1,22 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { GamePhase, Formation, Player, TableRow, Fixture, MatchReport, GameEvent, FinanceEntry } from '../types/game';
+import type { GamePhase, Formation, Player, TableRow, Fixture, MatchReport, GameEvent, FinanceEntry, Position } from '../types/game';
+
+const POS_ORDER: Position[] = ['T', 'V', 'M', 'S'];
+
+function computeXI(players: Player[], formation: Formation): string[] {
+  const lines = formation.split('-').map(Number);
+  const needs = [1, lines[0], lines[1], lines[2]];
+  const ids: string[] = [];
+  POS_ORDER.forEach((pos, i) => {
+    players
+      .filter(p => p.position === pos && !p.injuredFor && !p.suspended)
+      .sort((a, b) => b.skill - a.skill)
+      .slice(0, needs[i])
+      .forEach(p => ids.push(p.id));
+  });
+  return ids;
+}
 import { LEAGUE_TEAMS, getAllRosters } from '../data/teams';
 import { GAME_EVENTS, CHAIRMAN_MESSAGES } from '../data/events';
 import { STARTING_BALANCE, WAGES_PER_MATCHDAY, calcMatchRevenue } from '../data/finances';
@@ -48,6 +64,7 @@ export interface GameStore {
   totalMatchdays: number;
   rosters: Record<number, Player[]>;
   formation: Formation;
+  startingXI: string[];
   table: TableRow[];
   fixtures: Fixture[];
   balance: number;
@@ -85,6 +102,7 @@ export interface GameStore {
   startNewGame: (managerName: string, teamId: number, portrait?: string, difficulty?: Difficulty) => void;
   playMatchday: () => void;
   setFormation: (f: Formation) => void;
+  setStartingXI: (ids: string[]) => void;
   trainPlayer: (playerId: string) => void;
   setTraining: (type: 'massage' | 'skills' | 'shape', value: number) => void;
   dismissEvent: () => void;
@@ -167,6 +185,7 @@ export const useGameStore = create<GameStore>()(
       totalMatchdays: 38,
       rosters: {},
       formation: '4-4-2',
+      startingXI: [],
       table: [],
       fixtures: [],
       balance: STARTING_BALANCE,
@@ -210,6 +229,7 @@ export const useGameStore = create<GameStore>()(
           totalMatchdays: 38,
           rosters,
           formation: '4-4-2',
+          startingXI: computeXI(rosters[teamId] ?? [], '4-4-2'),
           table,
           fixtures,
           balance: startingBalances[difficulty],
@@ -236,7 +256,8 @@ export const useGameStore = create<GameStore>()(
 
       playMatchday: () => {
         const s = get();
-        const { currentMatchday, fixtures, rosters, managedTeamId, formation, table, balance, financeHistory, managerName, priceLevel, foodEnabled, merchandiseEnabled, trainingSkills, trainingShape, borderSponsors, stadium, difficulty, staff, pendingBet, eventLog, mediaDeal } = s;
+        const { currentMatchday, fixtures, rosters, managedTeamId, formation, startingXI, table, balance, financeHistory, managerName, priceLevel, foodEnabled, merchandiseEnabled, trainingSkills, trainingShape, borderSponsors, stadium, difficulty, staff, pendingBet, eventLog, mediaDeal } = s;
+        const xiSet = new Set(startingXI ?? []);
 
         const dayFixtures = fixtures.filter(f => f.matchday === currentMatchday && !f.homeGoals && f.homeGoals !== 0);
         if (dayFixtures.length === 0) return;
@@ -258,8 +279,14 @@ export const useGameStore = create<GameStore>()(
 
           if (fixture.homeTeamId === managedTeamId || fixture.awayTeamId === managedTeamId) {
             const isHome = fixture.homeTeamId === managedTeamId;
+            const xiHomePlayers = isHome
+              ? homePlayers.filter(p => xiSet.size > 0 ? xiSet.has(p.id) : true)
+              : homePlayers;
+            const xiAwayPlayers = !isHome
+              ? awayPlayers.filter(p => xiSet.size > 0 ? xiSet.has(p.id) : true)
+              : awayPlayers;
             const report = simulateFullMatch(
-              fixture, homeTeam, awayTeam, homePlayers, awayPlayers,
+              fixture, homeTeam, awayTeam, xiHomePlayers, xiAwayPlayers,
               isHome ? formation : '4-4-2',
               trainingMod,
             );
@@ -393,9 +420,39 @@ export const useGameStore = create<GameStore>()(
 
         const newRosters = { ...rosters };
         if (newRosters[managedTeamId]) {
-          newRosters[managedTeamId] = newRosters[managedTeamId].map(p =>
-            p.injuredFor > 0 ? { ...p, injuredFor: p.injuredFor - 1 } : p
-          );
+          const matchEvents = lastMatch?.events.filter(e => e.teamId === managedTeamId) ?? [];
+          const cardEvents = matchEvents.filter(e => e.type === 'yellow' || e.type === 'red');
+          const goalEvents = matchEvents.filter(e => e.type === 'goal');
+          const xiSet = new Set(startingXI ?? []);
+          newRosters[managedTeamId] = newRosters[managedTeamId].map(p => {
+            let next = p.injuredFor > 0 ? { ...p, injuredFor: p.injuredFor - 1 } : { ...p };
+            // Clear suspension after sitting out
+            if (next.suspended) next = { ...next, suspended: false };
+            // Apply cards from this match
+            for (const ev of cardEvents) {
+              if (ev.playerName === p.name) {
+                if (ev.type === 'red') {
+                  next = { ...next, suspended: true };
+                } else {
+                  const newYellows = (next.yellowCards ?? 0) + 1;
+                  next = newYellows >= 2
+                    ? { ...next, yellowCards: 0, suspended: true }
+                    : { ...next, yellowCards: newYellows };
+                }
+              }
+            }
+            // Accumulate goals from match events
+            const scored = goalEvents.filter(e => e.playerName === p.name).length;
+            if (scored > 0) next = { ...next, goals: (next.goals ?? 0) + scored };
+            // Injury chance: 8% for players who played, 2% for those on bench
+            if (next.injuredFor === 0 && !next.suspended) {
+              const chance = xiSet.has(p.id) ? 0.08 : 0.02;
+              if (Math.random() < chance) {
+                next = { ...next, injuredFor: 1 + Math.floor(Math.random() * 3) };
+              }
+            }
+            return next;
+          });
         }
 
         set({
@@ -417,7 +474,11 @@ export const useGameStore = create<GameStore>()(
         });
       },
 
-      setFormation: (formation) => set({ formation }),
+      setFormation: (formation) => {
+        const { rosters, managedTeamId } = get();
+        set({ formation, startingXI: computeXI(rosters[managedTeamId] ?? [], formation) });
+      },
+      setStartingXI: (ids) => set({ startingXI: ids }),
 
       setTraining: (type, value) => {
         const s = get();
@@ -558,6 +619,25 @@ export const useGameStore = create<GameStore>()(
       signMediaDeal: (deal) => set({ mediaDeal: deal }),
       cancelMediaDeal: () => set({ mediaDeal: null }),
     }),
-    { name: 'ifog-game-state' }
+    {
+      name: 'ifog-game-state',
+      storage: {
+        getItem: (key) => {
+          try {
+            const raw = localStorage.getItem(key);
+            return raw ? JSON.parse(raw) : null;
+          } catch {
+            localStorage.removeItem(key);
+            return null;
+          }
+        },
+        setItem: (key, value) => {
+          try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+        },
+        removeItem: (key) => {
+          try { localStorage.removeItem(key); } catch {}
+        },
+      },
+    }
   )
 );

@@ -10,6 +10,9 @@ export interface Player {
   age: number;
   injuredFor: number;   // matchdays remaining injured
   suspended: boolean;
+  yellowCards: number;  // 0-1; 2 triggers a suspension
+  shirtNumber: number;
+  goals: number;
   trainingProgress: number; // 0-5, resets on skill gain
 }
 

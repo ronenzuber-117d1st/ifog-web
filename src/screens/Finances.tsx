@@ -60,7 +60,7 @@ function generateHirePlayers(matchday: number, teamId: number): Player[] {
 }
 
 const POS_LABEL: Record<string, string> = { T: 'GK', V: 'DEF', M: 'MID', S: 'FWD' };
-const CARD = { background: '#161b27', border: '1px solid #28314a', borderRadius: '8px' } as const;
+const CARD = { background: '#0f1628', border: '1px solid #1c2640', borderRadius: '12px' } as const;
 
 export function Finances() {
   const { managedTeamId, currentMatchday, balance, shirtSponsor, borderSponsors, rosters, transfersUsed, acceptShirtSponsor, acceptBorderDeal, hirePlayer, sellPlayer } = useGameStore();
@@ -77,10 +77,10 @@ export function Finances() {
   return (
     <Layout>
       {/* Full height flex column */}
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#0d1117', fontFamily: 'Arial, system-ui', fontSize: '13px' }}>
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#070b16', fontFamily: "'Barlow', system-ui, sans-serif", fontSize: '13px', color: '#e8edf7' }}>
 
         {/* Tabs — fixed height */}
-        <div style={{ flexShrink: 0, display: 'flex', padding: '8px 10px 0', gap: '4px', borderBottom: '1px solid #1e2535' }}>
+        <div style={{ flexShrink: 0, display: 'flex', padding: '10px 12px 0', gap: '4px', borderBottom: '1px solid #1c2640' }}>
           {(['shirt', 'borders', 'transfer'] as Tab[]).map(t => {
             const labels: Record<Tab, string> = {
               shirt: 'Shirt',
@@ -90,16 +90,15 @@ export function Finances() {
             const active = tab === t;
             return (
               <button key={t} onClick={() => setTab(t)} style={{
-                padding: '6px 20px', fontSize: '12px',
-                fontWeight: active ? 'bold' : 'normal',
-                background: active ? '#161b27' : 'transparent',
+                padding: '7px 20px', fontSize: '13px',
+                fontWeight: active ? 700 : 600,
+                background: 'transparent',
                 cursor: 'pointer',
-                border: '1px solid',
-                borderColor: active ? '#28314a' : 'transparent',
-                borderRadius: '6px 6px 0 0',
-                marginBottom: active ? '-1px' : '0',
-                position: 'relative', zIndex: active ? 1 : 0,
-                color: active ? '#ffffff' : '#64748b',
+                border: 'none',
+                borderBottom: `3px solid ${active ? '#c8f53d' : 'transparent'}`,
+                marginBottom: '-1px',
+                color: active ? '#ffffff' : '#8d99b5',
+                whiteSpace: 'nowrap',
               }}>
                 {labels[t]}
               </button>
@@ -108,7 +107,7 @@ export function Finances() {
         </div>
 
         {/* Content — fills remaining height */}
-        <div style={{ flex: 1, minHeight: 0, padding: '10px', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flex: 1, minHeight: 0, padding: '12px', display: 'flex', flexDirection: 'column' }}>
           {tab === 'shirt' && (
             <ShirtTab
               shirtSponsor={shirtSponsor}
@@ -273,7 +272,7 @@ function BordersTab({ borderSponsors, borderOffers, canAccept, onAccept }: {
                 <div style={{ color: '#94a3b8', fontSize: '10px', marginTop: '3px' }}>{d.matchdaysLeft} matchday{d.matchdaysLeft !== 1 ? 's' : ''} left</div>
                 <div style={{ display: 'flex', gap: '2px', justifyContent: 'center', marginTop: '5px' }}>
                   {Array.from({ length: d.matchdays }).map((_, j) => (
-                    <div key={j} style={{ width: '6px', height: '3px', borderRadius: '2px', background: j < d.matchdaysLeft ? '#3b82f6' : '#1e2535' }} />
+                    <div key={j} style={{ width: '6px', height: '3px', borderRadius: '2px', background: j < d.matchdaysLeft ? '#3b82f6' : '#1c2640' }} />
                   ))}
                 </div>
               </div>
@@ -341,18 +340,18 @@ function TransferTab({ hirePlayers, myPlayers, balance, transfersLeft, onHire, o
       {/* Image panels — fixed height */}
       <div style={{ flexShrink: 0, display: 'flex', gap: '8px', height: '110px' }}>
         <div
-          style={{ flex: 1, borderRadius: '8px', background: '#1a1a40', position: 'relative', overflow: 'hidden', cursor: 'pointer', border: `2px solid ${mode === 'hire' ? '#3b82f6' : '#1e2535'}` }}
+          style={{ flex: 1, borderRadius: '8px', background: '#1a1a40', position: 'relative', overflow: 'hidden', cursor: 'pointer', border: `2px solid ${mode === 'hire' ? '#3b82f6' : '#1c2640'}` }}
           onClick={() => setMode('hire')}>
           <img src={img('pommes1.png')} style={{ width: '100%', height: '100%', objectFit: 'cover', imageRendering: 'pixelated' }} alt="" />
           <div style={{ position: 'absolute', bottom: '8px', left: '50%', transform: 'translateX(-50%)', color: mode === 'hire' ? '#60a5fa' : '#ffffff', fontWeight: 'bold', fontSize: '15px', textShadow: '2px 2px 4px #000', textAlign: 'center' }}>
             Player Hire
           </div>
         </div>
-        <div style={{ width: '70px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #1e2535' }}>
+        <div style={{ width: '70px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #1c2640' }}>
           <img src={img('felda1.png')} style={{ width: '100%', height: '100%', objectFit: 'cover', imageRendering: 'pixelated' }} alt="" />
         </div>
         <div
-          style={{ flex: 1, borderRadius: '8px', background: '#401a1a', position: 'relative', overflow: 'hidden', cursor: 'pointer', border: `2px solid ${mode === 'sell' ? '#ef4444' : '#1e2535'}` }}
+          style={{ flex: 1, borderRadius: '8px', background: '#401a1a', position: 'relative', overflow: 'hidden', cursor: 'pointer', border: `2px solid ${mode === 'sell' ? '#ef4444' : '#1c2640'}` }}
           onClick={() => setMode('sell')}>
           <img src={img('verkauf.png')} style={{ width: '100%', height: '100%', objectFit: 'cover', imageRendering: 'pixelated' }} alt="" />
           <div style={{ position: 'absolute', bottom: '8px', left: '50%', transform: 'translateX(-50%)', color: mode === 'sell' ? '#f87171' : '#ffffff', fontWeight: 'bold', fontSize: '15px', textShadow: '2px 2px 4px #000', textAlign: 'center' }}>
@@ -373,9 +372,9 @@ function TransferTab({ hirePlayers, myPlayers, balance, transfersLeft, onHire, o
               return (
                 <div key={p.id} onClick={() => setSelectedHire(selected ? null : p)} style={{
                   display: 'flex', alignItems: 'center', gap: '8px',
-                  background: selected ? '#1e3a5f' : '#0d1117',
+                  background: selected ? '#1e3a5f' : '#070b16',
                   padding: '5px 8px', cursor: 'pointer',
-                  border: `1px solid ${selected ? '#3b82f6' : '#1e2535'}`, borderRadius: '5px',
+                  border: `1px solid ${selected ? '#3b82f6' : '#1c2640'}`, borderRadius: '5px',
                   opacity: !canAfford || transfersLeft <= 0 ? 0.5 : 1,
                 }}>
                   <span style={{ fontWeight: 'bold', fontSize: '10px', width: '26px', color: '#60a5fa' }}>{POS_LABEL[p.position]}</span>
@@ -406,9 +405,9 @@ function TransferTab({ hirePlayers, myPlayers, balance, transfersLeft, onHire, o
               return (
                 <div key={p.id} onClick={() => setSelectedSell(selected ? null : p.id)} style={{
                   display: 'flex', alignItems: 'center', gap: '8px',
-                  background: selected ? '#1e3a5f' : '#0d1117',
+                  background: selected ? '#1e3a5f' : '#070b16',
                   padding: '5px 8px', cursor: 'pointer',
-                  border: `1px solid ${selected ? '#3b82f6' : '#1e2535'}`, borderRadius: '5px',
+                  border: `1px solid ${selected ? '#3b82f6' : '#1c2640'}`, borderRadius: '5px',
                 }}>
                   <span style={{ fontWeight: 'bold', fontSize: '10px', width: '26px', color: '#60a5fa' }}>{POS_LABEL[p.position]}</span>
                   <span style={{ flex: 1, fontSize: '11px', color: '#e2e8f0' }}>{p.name}</span>

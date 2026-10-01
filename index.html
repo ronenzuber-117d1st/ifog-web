@@ -5,9 +5,25 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ifog-web</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Barlow:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      window.onerror = function(msg, src, line, col, err) {
+        document.body.innerHTML = '<div style="background:#0a0f1d;color:#ff7a6b;padding:32px;font-family:monospace;white-space:pre-wrap;font-size:13px">'
+          + '<div style="color:#c8f53d;font-weight:700;margin-bottom:16px">STARTUP ERROR</div>'
+          + (err ? err.stack : msg)
+          + '<br><br><button onclick="localStorage.removeItem(\'ifog-game-state\');location.reload()" '
+          + 'style="padding:10px 20px;background:#c8f53d;color:#070b16;border:none;border-radius:8px;font-weight:700;cursor:pointer">'
+          + 'Clear save &amp; reload</button></div>';
+      };
+      window.addEventListener('unhandledrejection', function(e) {
+        window.onerror(e.reason?.message, '', 0, 0, e.reason);
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -117,13 +117,13 @@ export function Stadium() {
     const active = tab === t;
     return (
       <button key={t} onClick={() => setTab(t)} style={{
-        padding: '8px 16px', fontSize: '13px', cursor: 'pointer',
-        fontWeight: active ? 'bold' : 'normal',
-        background: active ? '#161b27' : '#0d1117',
-        border: '1px solid', borderColor: active ? '#3b82f6' : '#1e2535',
-        borderRadius: '6px 6px 0 0', marginBottom: active ? '-1px' : '0',
-        position: 'relative', zIndex: active ? 1 : 0,
-        color: active ? '#ffffff' : '#94a3b8',
+        padding: '7px 16px', fontSize: '13px', cursor: 'pointer',
+        fontWeight: active ? 700 : 600,
+        background: 'transparent',
+        border: 'none',
+        borderBottom: `3px solid ${active ? '#c8f53d' : 'transparent'}`,
+        marginBottom: '-1px',
+        color: active ? '#ffffff' : '#8d99b5',
         whiteSpace: 'nowrap',
       }}>{TAB_LABELS[t]}</button>
     );
@@ -131,10 +131,10 @@ export function Stadium() {
 
   return (
     <Layout>
-      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#0d1117', fontFamily: 'Arial, system-ui' }}>
+      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#070b16', fontFamily: "'Barlow', system-ui, sans-serif", color: '#e8edf7' }}>
 
         {/* ── Tab bar (single row) ── */}
-        <div style={{ flexShrink: 0, padding: '6px 8px 0', background: '#0d1117', borderBottom: '1px solid #28314a' }}>
+        <div style={{ flexShrink: 0, padding: '8px 12px 0', background: '#0a0f1d', borderBottom: '1px solid #1c2640' }}>
           <div style={{ display: 'flex', gap: '3px' }}>
             {[...TAB_ROW1, ...TAB_ROW2].map(tabBtn)}
           </div>
@@ -175,7 +175,7 @@ export function Stadium() {
                   desc={UPGRADE_LABELS.pitch[pitchLevel - 1]}        canAfford={balance >= UPGRADE_COSTS.pitch[pitchLevel]}
                   onUpgrade={() => upgradeStadium('pitch')}          style={{ top: '68%', left: '5%' }} />
               </div>
-              <div style={{ flexShrink: 0, background: '#0d1117', borderTop: '1px solid #1e2535', padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px' }}>
+              <div style={{ flexShrink: 0, background: '#0a0f1d', borderTop: '1px solid #1c2640', padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px' }}>
                 <div style={{ display: 'flex', gap: '20px' }}>
                   {(['pitch', 'seats', 'facilities', 'lights'] as const).map(t => (
                     <div key={t} style={{ textAlign: 'center' }}>
@@ -628,7 +628,7 @@ function UpgradeChip({ label, current, cost, desc, canAfford, onUpgrade, style }
         <div style={{ fontSize: '10px', color: '#fff', fontWeight: 'bold' }}>{desc}</div>
         <div style={{ display: 'flex', gap: '3px', marginTop: '2px' }}>
           {[1, 2, 3].map(l => (
-            <div key={l} style={{ width: '18px', height: '4px', borderRadius: '2px', background: l <= current ? '#4ade80' : '#1e2535' }} />
+            <div key={l} style={{ width: '18px', height: '4px', borderRadius: '2px', background: l <= current ? '#c8f53d' : '#1c2640' }} />
           ))}
         </div>
       </div>

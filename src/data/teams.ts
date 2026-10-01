@@ -40,6 +40,32 @@ const DEF_NAMES = ['Amaretto','Cruff','Eddie','Henman','Johnson','Moore','Vincen
 const MID_NAMES = ['De Toto','Romarino','Allen','Campbell','Jones','Myers','Smith','Vine','Beesley','Foster','Jacobs','Newman','Stanners','Wheeler','Collins','Edwards','Kieron','Leonard','Ray','Thomas','Anderson','Calvers','Justin','Neil','Stapleton','Vale','Barrett','Davidson','Kenny','Parker'];
 const STR_NAMES = ['Klinsman','Yuruba','Donaldson','Ellis','Lee','Osbourne','Quentin','Walters','Court','Evergreen','Murdoch','Dell','Peters','Forrest','Haynes','Niall','Goldman','Finchley','Gilbert','Oakley','Phillips','Grant','Herman','Gordon','Ainsley','Jacks','Kershaw','Dickson','James','Arthur'];
 
+// Must be defined before HARDCODED (which calls buildRoster → assignShirtNumbers at module init)
+const SHIRT_POOLS: Record<Position, number[]> = {
+  T: [1, 0, 13, 23, 30],
+  V: [2, 3, 4, 5, 6, 12, 15, 16, 17],
+  M: [7, 8, 14, 18, 19, 20, 21, 28, 29],
+  S: [9, 10, 11, 22, 24, 25, 26, 27],
+};
+
+export function assignShirtNumbersToRoster(players: Player[]): Player[] {
+  return assignShirtNumbers(players);
+}
+
+function assignShirtNumbers(players: Player[]): Player[] {
+  const used = new Set<number>();
+  const counters: Record<Position, number> = { T: 0, V: 0, M: 0, S: 0 };
+  let overflow = 31;
+  return players.map(p => {
+    const pool = SHIRT_POOLS[p.position];
+    const idx = counters[p.position]++;
+    let num = pool[idx] ?? overflow++;
+    while (used.has(num)) num = overflow++;
+    used.add(num);
+    return { ...p, shirtNumber: num };
+  });
+}
+
 const HARDCODED: Record<number, Player[]> = {
   1: buildRoster(1, [
     ['Heman','T',9,32],['Lookick','T',6,35],['Blandrews','T',0,25],
@@ -74,7 +100,7 @@ const HARDCODED: Record<number, Player[]> = {
 };
 
 function buildRoster(teamId: number, data: [string, string, number, number][]): Player[] {
-  return data.map(([name, pos, skill, age], i) => ({
+  const raw = data.map(([name, pos, skill, age], i) => ({
     id: `t${teamId}-p${i}`,
     name,
     position: pos as Position,
@@ -82,8 +108,12 @@ function buildRoster(teamId: number, data: [string, string, number, number][]): 
     age,
     injuredFor: 0,
     suspended: false,
+    yellowCards: 0,
+    shirtNumber: 0,
+    goals: 0,
     trainingProgress: 0,
   }));
+  return assignShirtNumbers(raw);
 }
 
 function generateRoster(teamId: number, baseSkill: number): Player[] {
@@ -118,12 +148,14 @@ function generateRoster(teamId: number, baseSkill: number): Player[] {
         age: randAge(),
         injuredFor: 0,
         suspended: false,
+        yellowCards: 0,
+        shirtNumber: 0,
         trainingProgress: 0,
       });
       _idx++;
     }
   }
-  return players;
+  return assignShirtNumbers(players);
 }
 
 export function getRoster(teamId: number): Player[] {
