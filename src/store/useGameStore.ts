@@ -19,7 +19,7 @@ function computeXI(players: Player[], formation: Formation): string[] {
 }
 import { LEAGUE_TEAMS, getAllRosters } from '../data/teams';
 import { GAME_EVENTS, CHAIRMAN_MESSAGES } from '../data/events';
-import { STARTING_BALANCE, WAGES_PER_MATCHDAY, calcMatchRevenue } from '../data/finances';
+import { STARTING_BALANCE, WAGES_PER_MATCHDAY, calcMatchRevenue, calcDemand } from '../data/finances';
 import { generateFixtures } from '../engine/scheduler';
 import { simulateFullMatch, simulateMatch } from '../engine/matchEngine';
 
@@ -267,7 +267,8 @@ export const useGameStore = create<GameStore>()(
         const updatedFixtures = [...fixtures];
 
         const difficultyMod = difficulty === 'beginner' ? 1.12 : difficulty === 'expert' ? 0.88 : 1.0;
-        const trainingMod = (1 + (trainingSkills * 0.008) + (trainingShape * 0.005) + (stadium.pitch - 1) * 0.02) * difficultyMod;
+        const coachTrainingBonus = staff.coach === 3 ? 0.04 : 0; // Kelvin Kneegan
+        const trainingMod = (1 + (trainingSkills * 0.008) + (trainingShape * 0.005) + (stadium.pitch - 1) * 0.02 + coachTrainingBonus) * difficultyMod;
 
         for (const fixture of dayFixtures) {
           const homeTeam = LEAGUE_TEAMS.find(t => t.id === fixture.homeTeamId)!;
@@ -292,7 +293,13 @@ export const useGameStore = create<GameStore>()(
             );
             homeGoals = report.fixture.homeGoals!;
             awayGoals = report.fixture.awayGoals!;
-            lastMatch = report;
+            // Bob Robinson (Chaotic): ±1 goal swing
+            if (staff.coach === 1) {
+              const swing = Math.random() < 0.5 ? 1 : -1;
+              if (isHome) homeGoals = Math.max(0, homeGoals + swing);
+              else awayGoals = Math.max(0, awayGoals + swing);
+            }
+            lastMatch = { ...report, fixture: { ...report.fixture, homeGoals, awayGoals } };
           } else {
             const result = simulateMatch(homeTeam, awayTeam, homePlayers, awayPlayers, '4-4-2', '4-4-2', 1);
             homeGoals = result.homeGoals;
@@ -312,9 +319,15 @@ export const useGameStore = create<GameStore>()(
         newTable = sortTable(newTable);
 
         const isHomeMatch = dayFixtures.some(f => f.homeTeamId === managedTeamId);
-        const seatBonus = (stadium.seats - 1) * 0.15;
-        const matchRevenue = calcMatchRevenue(isHomeMatch, priceLevel, foodEnabled, merchandiseEnabled) * (1 + seatBonus);
-        const wages = WAGES_PER_MATCHDAY;
+        const myRow = table.find(r => r.teamId === managedTeamId);
+        const myPosition = table.findIndex(r => r.teamId === managedTeamId) + 1;
+        const ppg = myRow && myRow.played > 0 ? myRow.points / myRow.played : 1.5;
+        const demand = calcDemand(myPosition > 0 ? myPosition : 10, ppg);
+        const matchRevenue = calcMatchRevenue(
+          isHomeMatch, priceLevel, demand, stadium.seats,
+          staff.fishChips > 0, staff.fanShop > 0,
+        );
+        const wages = WAGES_PER_MATCHDAY - (staff.coach === 4 ? 10_000 : 0); // Mag Catcher (Torry)
         const net = matchRevenue - wages;
 
         const event = pickEvent();
@@ -444,9 +457,9 @@ export const useGameStore = create<GameStore>()(
             // Accumulate goals from match events
             const scored = goalEvents.filter(e => e.playerName === p.name).length;
             if (scored > 0) next = { ...next, goals: (next.goals ?? 0) + scored };
-            // Injury chance: 8% for players who played, 2% for those on bench
+            // Injury chance: 8%/2% normally; Diana Dancer (Flower Power) reduces to 5%/1%
             if (next.injuredFor === 0 && !next.suspended) {
-              const chance = xiSet.has(p.id) ? 0.08 : 0.02;
+              const chance = xiSet.has(p.id) ? (staff.coach === 2 ? 0.05 : 0.08) : (staff.coach === 2 ? 0.01 : 0.02);
               if (Math.random() < chance) {
                 next = { ...next, injuredFor: 1 + Math.floor(Math.random() * 3) };
               }

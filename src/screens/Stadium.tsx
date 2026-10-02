@@ -3,7 +3,7 @@ import { useGameStore } from '../store/useGameStore';
 import { Layout } from '../components/Layout';
 import { img } from '../utils/images';
 import { LEAGUE_TEAMS } from '../data/teams';
-import { FOOD_REVENUE_PER_MATCH, MERCH_REVENUE_PER_MATCH, TICKET_PRICE_PRESETS } from '../data/finances';
+import { FOOD_REVENUE_PER_MATCH, MERCH_REVENUE_PER_MATCH, TICKET_PRICE_PRESETS, calcDemand, calcTicketSalesByDemand } from '../data/finances';
 
 type StadiumTab = 'stadium' | 'magazine' | 'tickets' | 'cheerleader' | 'fishchips' | 'fanshop' | 'viplounge' | 'radiotv';
 
@@ -21,8 +21,8 @@ const UPGRADE_LABELS: Record<string, string[]> = {
   lights:     ['Dim Lights', 'Bright Lights', 'Floodlit'],
 };
 
-const TAB_ROW1: StadiumTab[] = ['stadium', 'magazine', 'tickets', 'cheerleader', 'fishchips'];
-const TAB_ROW2: StadiumTab[] = ['fanshop', 'viplounge', 'radiotv'];
+const TAB_ROW1: StadiumTab[] = ['stadium', 'magazine', 'tickets', 'fishchips', 'fanshop'];
+const TAB_ROW2: StadiumTab[] = ['cheerleader', 'viplounge', 'radiotv'];
 const TAB_LABELS: Record<StadiumTab, string> = {
   stadium: 'Stadium', magazine: 'Magazine', tickets: 'Tickets',
   cheerleader: 'Cheerleader', fishchips: 'Fish & Chips',
@@ -66,9 +66,6 @@ const SHOP_ITEMS = [
   { name: 'Computergames', price: 40.00 },
 ];
 
-// Base ticket sales at seats level 1; scaled by capacity
-const BASE_TICKET_SALES = [2500, 7607, 3792, 3814, 773, 882, 775, 50];
-const SEAT_SCALE = [1, 1.6, 2.5];
 
 // One portrait per team (20 teams, 20 distinct portraits)
 const TEAM_PORTRAITS = [
@@ -111,7 +108,11 @@ export function Stadium() {
   const myShare   = Math.round((mySkill / total) * 34);
   const oppShare  = 34 - myShare;
 
-  const ticketSales = BASE_TICKET_SALES.map(s => Math.round(s * SEAT_SCALE[seatsLevel - 1]));
+  const myTableRow  = table.find(r => r.teamId === managedTeamId);
+  const myPosition  = table.findIndex(r => r.teamId === managedTeamId) + 1;
+  const ppg         = myTableRow && myTableRow.played > 0 ? myTableRow.points / myTableRow.played : 1.5;
+  const demand      = calcDemand(myPosition > 0 ? myPosition : 10, ppg);
+  const ticketSales = calcTicketSalesByDemand(demand, priceLevel, seatsLevel);
 
   const tabBtn = (t: StadiumTab) => {
     const active = tab === t;
@@ -246,24 +247,24 @@ export function Stadium() {
           {tab === 'tickets' && (
             <div style={{ height: '100%', overflow: 'hidden', background: '#2a2a2a', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', boxSizing: 'border-box' }}>
               <div style={{ width: '620px', height: '100%', display: 'flex', flexDirection: 'column', boxShadow: '6px 6px 20px rgba(0,0,0,0.6)' }}>
-                <div style={{ flex: '0 0 42%', overflow: 'hidden' }}>
+                <div style={{ flex: '0 0 40%', overflow: 'hidden' }}>
                   <img src={img(`ticket${staff.ticketSales === 0 ? 0 : (staff.ticketSales - 1) * 2 + 1 + (currentMatchday % 2)}.png`)} alt="Tickets" style={{ width: '100%', height: '100%', objectFit: 'fill', imageRendering: 'pixelated' }} />
                 </div>
-                <div style={{ background: '#f0f0f0', color: '#000', fontFamily: 'monospace', fontSize: '17px', padding: '12px' }}>
-                  <div style={{ display: 'flex', gap: '10px' }}>
-                    <div style={{ flex: 1, border: '1px solid #aaa', padding: '12px' }}>
-                      <div style={{ fontWeight: 'bold', textAlign: 'center', borderBottom: '1px solid #aaa', paddingBottom: '6px', marginBottom: '10px', fontSize: '19px' }}>Ticket prices</div>
+                <div style={{ flex: 1, overflow: 'hidden', background: '#f0f0f0', color: '#000', fontFamily: 'monospace', fontSize: '15px', padding: '10px' }}>
+                  <div style={{ display: 'flex', gap: '10px', height: '100%' }}>
+                    <div style={{ flex: 1, border: '1px solid #aaa', padding: '10px', overflow: 'hidden' }}>
+                      <div style={{ fontWeight: 'bold', textAlign: 'center', borderBottom: '1px solid #aaa', paddingBottom: '5px', marginBottom: '6px', fontSize: '17px' }}>Ticket prices</div>
                       {TICKET_CATEGORIES.map((cat, i) => (
-                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 2px' }}>
+                        <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 2px' }}>
                           <span>{cat.name}</span>
-                          <span style={{ textAlign: 'center', minWidth: '60px' }}>{cat.price.toLocaleString()}</span>
+                          <span style={{ textAlign: 'center', minWidth: '60px' }}>{TICKET_PRICE_PRESETS[priceLevel][i].toLocaleString()}</span>
                         </div>
                       ))}
                     </div>
-                    <div style={{ width: '180px', border: '1px solid #aaa', padding: '12px' }}>
-                      <div style={{ fontWeight: 'bold', textAlign: 'center', borderBottom: '1px solid #aaa', paddingBottom: '6px', marginBottom: '10px', fontSize: '19px' }}>Sales (Amount)</div>
+                    <div style={{ width: '170px', border: '1px solid #aaa', padding: '10px', overflow: 'hidden' }}>
+                      <div style={{ fontWeight: 'bold', textAlign: 'center', borderBottom: '1px solid #aaa', paddingBottom: '5px', marginBottom: '6px', fontSize: '17px' }}>Est. / Match</div>
                       {ticketSales.map((s, i) => (
-                        <div key={i} style={{ textAlign: 'center', padding: '5px 2px' }}>{s.toLocaleString()}</div>
+                        <div key={i} style={{ textAlign: 'center', padding: '3px 2px' }}>{s.toLocaleString()}</div>
                       ))}
                     </div>
                   </div>
@@ -292,7 +293,7 @@ export function Stadium() {
           {tab === 'fishchips' && (
             <div style={{ height: '100%', overflow: 'hidden', background: '#2a2a2a', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', boxSizing: 'border-box' }}>
               <div style={{ width: '620px', height: '100%', display: 'flex', flexDirection: 'column', boxShadow: '6px 6px 20px rgba(0,0,0,0.6)' }}>
-                <div style={{ flex: '0 0 35%', overflow: 'hidden' }}>
+                <div style={{ flex: '0 0 40%', overflow: 'hidden' }}>
                   <img src={img(`pommes${staff.fishChips === 0 ? 0 : (staff.fishChips - 1) * 2 + 1 + (currentMatchday % 2)}.png`)} alt="Fish & Chips"
                     style={{ width: '100%', height: '100%', objectFit: 'fill', imageRendering: 'pixelated' }} />
                 </div>
@@ -388,7 +389,7 @@ export function Stadium() {
           {tab === 'fanshop' && (
             <div style={{ height: '100%', overflow: 'hidden', background: '#2a2a2a', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', boxSizing: 'border-box' }}>
               <div style={{ width: '620px', height: '100%', display: 'flex', flexDirection: 'column', boxShadow: '6px 6px 20px rgba(0,0,0,0.6)' }}>
-                <div style={{ flex: '0 0 35%', overflow: 'hidden' }}>
+                <div style={{ flex: '0 0 40%', overflow: 'hidden' }}>
                   <img src={img(`fanbude${staff.fanShop === 0 ? 0 : (staff.fanShop - 1) * 2 + 1 + (currentMatchday % 2)}.png`)} alt="Fan Shop"
                     style={{ width: '100%', height: '100%', objectFit: 'fill', imageRendering: 'pixelated' }} />
                 </div>

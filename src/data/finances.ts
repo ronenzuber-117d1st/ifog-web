@@ -26,23 +26,58 @@ export const WAGES_PER_MATCHDAY = 120_000;
 export const FOOD_REVENUE_PER_MATCH = 65_000;
 export const MERCH_REVENUE_PER_MATCH = 45_000;
 
-export function calcTicketRevenue(priceLevel: 'low' | 'medium' | 'high'): number {
+// Seat capacity multiplier by seats upgrade level (1–3)
+export const SEAT_SCALE = [1.0, 1.6, 2.5];
+
+// Price elasticity: higher = attendance falls more steeply as team gets worse
+const PRICE_ELASTICITY: Record<string, number> = { low: 0.5, medium: 1.0, high: 2.0 };
+
+/**
+ * Demand factor 0.05–1.0 based on league position and points-per-game.
+ * position: 1 (top) – 20 (bottom)
+ * pointsPerGame: 0–3
+ */
+export function calcDemand(position: number, pointsPerGame: number): number {
+  const posFactor  = (20 - position) / 19;        // 1st = 1.0, 20th ≈ 0.05
+  const formFactor = Math.min(1, pointsPerGame / 3); // 3 pts/game = 1.0
+  return Math.max(0.05, Math.min(1.0, 0.55 * posFactor + 0.45 * formFactor));
+}
+
+/**
+ * Tickets sold per category, accounting for demand, price elasticity, and seat level.
+ * fillRate = demand ^ elasticity  (great team + high prices → still ~81% fill)
+ */
+export function calcTicketSalesByDemand(
+  demand: number,
+  priceLevel: 'low' | 'medium' | 'high',
+  seatsLevel: number,
+): number[] {
+  const fillRate = Math.pow(demand, PRICE_ELASTICITY[priceLevel]);
+  const scale    = SEAT_SCALE[seatsLevel - 1];
+  return TICKET_TYPES.map(t => Math.round(t.capacity * scale * fillRate));
+}
+
+export function calcTicketRevenue(
+  priceLevel: 'low' | 'medium' | 'high',
+  demand: number,
+  seatsLevel: number,
+): number {
   const prices = TICKET_PRICE_PRESETS[priceLevel];
-  return TICKET_TYPES.reduce((sum, t, i) => {
-    const seatsThisMatch = t.name.startsWith('Season') ? t.capacity / 38 : t.capacity;
-    return sum + seatsThisMatch * prices[i];
-  }, 0);
+  const sales  = calcTicketSalesByDemand(demand, priceLevel, seatsLevel);
+  return sales.reduce((sum, qty, i) => sum + qty * prices[i], 0);
 }
 
 export function calcMatchRevenue(
   isHome: boolean,
   priceLevel: 'low' | 'medium' | 'high',
+  demand: number,
+  seatsLevel: number,
   foodEnabled: boolean,
   merchandiseEnabled: boolean,
 ): number {
   if (!isHome) return 0;
   return (
-    calcTicketRevenue(priceLevel) +
+    calcTicketRevenue(priceLevel, demand, seatsLevel) +
     (foodEnabled ? FOOD_REVENUE_PER_MATCH : 0) +
     (merchandiseEnabled ? MERCH_REVENUE_PER_MATCH : 0)
   );

@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { Layout } from '../components/Layout';
 import { img } from '../utils/images';
-import { TICKET_TYPES, TICKET_PRICE_PRESETS, FOOD_REVENUE_PER_MATCH, MERCH_REVENUE_PER_MATCH } from '../data/finances';
+import { TICKET_TYPES, TICKET_PRICE_PRESETS, FOOD_REVENUE_PER_MATCH, MERCH_REVENUE_PER_MATCH, calcTicketRevenue, calcDemand } from '../data/finances';
 import { LEAGUE_TEAMS } from '../data/teams';
 
 type DeskTab = 'desk' | 'personnel' | 'cash-season' | 'cash-week' | 'bets' | 'memo';
@@ -17,10 +17,10 @@ const STAFF_COSTS: Record<string, number[]> = {
 };
 
 const COACHES = [
-  { id: 1, img: 'cotrai3', name: 'Bob Robinson',   heritage: 'Middlesex',  starSign: 'Libra',       ideology: 'Flower Power', salary: 5000 },
-  { id: 2, img: 'cotrai4', name: 'Diana Dancer',   heritage: 'Lands End',  starSign: 'Gemini',      ideology: 'Torry',        salary: 5000 },
-  { id: 3, img: 'cotrai5', name: 'Kelvin Kneegan', heritage: 'Kent',       starSign: 'Taurus',      ideology: 'Chaotic',      salary: 5000 },
-  { id: 4, img: 'cotrai6', name: 'Mag Catcher',    heritage: 'Highlands',  starSign: 'Sagittarius', ideology: 'Liberal',      salary: 5000 },
+  { id: 1, img: 'cotrai3', name: 'Bob Robinson',   heritage: 'Kent',       starSign: 'Taurus',      ideology: 'Chaotic',      salary: 5000, effect: 'Wild card — match results swing ±1 goal randomly' },
+  { id: 2, img: 'cotrai5', name: 'Diana Dancer',   heritage: 'Middlesex',  starSign: 'Libra',       ideology: 'Flower Power', salary: 5000, effect: 'Reduces injury risk: starters 5%, bench 1%' },
+  { id: 3, img: 'cotrai4', name: 'Kelvin Kneegan', heritage: 'Highlands',  starSign: 'Sagittarius', ideology: 'Liberal',      salary: 5000, effect: 'Squad trains 4% more effectively each matchday' },
+  { id: 4, img: 'cotrai6', name: 'Mag Catcher',    heritage: 'Lands End',  starSign: 'Gemini',      ideology: 'Torry',        salary: 5000, effect: 'Saves £10,000 off the wage bill each matchday' },
 ];
 
 const STAFF_LIST = [
@@ -62,8 +62,8 @@ function computeOdds(homeBase: number, awayBase: number): [number, number] {
 export function Desk() {
   const {
     managerName, currentMatchday, totalMatchdays, balance, financeHistory,
-    priceLevel, foodEnabled, merchandiseEnabled, setPriceLevel, setFoodEnabled, setMerchandiseEnabled,
-    rosters, managedTeamId, fixtures, table,
+    priceLevel, setPriceLevel, mediaDeal,
+    rosters, managedTeamId, fixtures, table, stadium,
     staff, pendingBet, eventLog,
     setStaff, setCoach, placeBet, cancelBet,
   } = useGameStore();
@@ -208,13 +208,13 @@ export function Desk() {
           </div>
 
           {/* Content */}
-          <main style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 28px 20px' }}>
+          <main style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 28px 16px' }}>
 
             {/* ══ DESK ══ */}
             {tab === 'desk' && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%' }}>
                 {/* Squad status bar */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', borderRadius: 12, background: '#0f1628', border: '1px solid #1c2640', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px', borderRadius: 12, background: '#0f1628', border: '1px solid #1c2640', flexWrap: 'wrap', flexShrink: 0 }}>
                   <div style={{ fontSize: 11, letterSpacing: '0.18em', textTransform: 'uppercase', color: '#8d99b5', fontWeight: 600, flexShrink: 0 }}>Squad Status</div>
                   {injured.length === 0 && suspended.length === 0 ? (
                     <Pill color="#5fd49a" bg="rgba(95,212,154,0.12)">
@@ -241,39 +241,68 @@ export function Desk() {
                   <button style={{ fontSize: 13, color: '#c8f53d', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: "'Barlow', system-ui, sans-serif", fontWeight: 600 }}>View squad →</button>
                 </div>
 
-                {/* Ticket pricing */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '14px 18px', borderRadius: 16, background: '#0f1628', border: '1px solid #1c2640' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <div style={{ fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 800, fontSize: 22, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Ticket Pricing</div>
-                      <div style={{ fontSize: 12, color: '#8d99b5', marginTop: 2 }}>Applies from the next home match</div>
+                {/* Ticket pricing + Revenue side by side */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, flex: 1, minHeight: 0 }}>
+
+                  {/* Ticket pricing */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '14px 18px', borderRadius: 16, background: '#0f1628', border: '1px solid #1c2640' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <div style={{ fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 800, fontSize: 22, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Ticket Pricing</div>
+                        <div style={{ fontSize: 12, color: '#8d99b5', marginTop: 2 }}>Applies from the next home match</div>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        {(['low', 'medium', 'high'] as const).map(level => (
+                          <button key={level} onClick={() => setPriceLevel(level)} style={{ height: 32, padding: '0 14px', borderRadius: 8, background: priceLevel === level ? '#c8f53d' : 'transparent', border: `1px solid ${priceLevel === level ? '#c8f53d' : '#2a3656'}`, color: priceLevel === level ? '#070b16' : '#a9b3cb', fontWeight: priceLevel === level ? 700 : 600, fontSize: 13, cursor: 'pointer', fontFamily: "'Barlow', system-ui, sans-serif", textTransform: 'capitalize' }}>{level}</button>
+                        ))}
+                      </div>
                     </div>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      {(['low', 'medium', 'high'] as const).map(level => (
-                        <button key={level} onClick={() => setPriceLevel(level)} style={{ height: 32, padding: '0 16px', borderRadius: 8, background: priceLevel === level ? '#c8f53d' : 'transparent', border: `1px solid ${priceLevel === level ? '#c8f53d' : '#2a3656'}`, color: priceLevel === level ? '#070b16' : '#a9b3cb', fontWeight: priceLevel === level ? 700 : 600, fontSize: 13, cursor: 'pointer', fontFamily: "'Barlow', system-ui, sans-serif", textTransform: 'capitalize' }}>{level}</button>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0,1fr))', gap: 8 }}>
+                      {TICKET_TYPES.map((t, i) => (
+                        <div key={t.name} style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '10px 12px', borderRadius: 10, background: '#131c33', border: '1px solid #1c2640' }}>
+                          <div style={{ fontSize: 12, color: '#8d99b5' }}>{t.name}</div>
+                          <div style={{ fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 800, fontSize: 22, color: '#e8edf7' }}>£{prices[i]}</div>
+                        </div>
                       ))}
                     </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 8 }}>
-                    {TICKET_TYPES.map((t, i) => (
-                      <div key={t.name} style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '10px 12px', borderRadius: 10, background: '#131c33', border: '1px solid #1c2640' }}>
-                        <div style={{ fontSize: 12, color: '#8d99b5' }}>{t.name}</div>
-                        <div style={{ fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 800, fontSize: 24, color: '#e8edf7' }}>£{prices[i]}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
 
-                {/* Stadium revenue */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: '14px 18px', borderRadius: 16, background: '#0f1628', border: '1px solid #1c2640' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <div style={{ fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 800, fontSize: 22, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Stadium Revenue</div>
-                    <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 14, color: '#5fd49a' }}>
-                      Per home match +£{((foodEnabled ? FOOD_REVENUE_PER_MATCH : 0) + (merchandiseEnabled ? MERCH_REVENUE_PER_MATCH : 0)).toLocaleString()}
-                    </div>
-                  </div>
-                  <ToggleRow label="Food stand" sub={`+£${(FOOD_REVENUE_PER_MATCH / 1000).toFixed(0)}K per home match`} value={foodEnabled} onChange={setFoodEnabled} />
-                  <ToggleRow label="Club shop"  sub={`+£${(MERCH_REVENUE_PER_MATCH / 1000).toFixed(0)}K per home match`} value={merchandiseEnabled} onChange={setMerchandiseEnabled} />
+                  {/* Revenue breakdown */}
+                  {(() => {
+                    const myRow    = table.find(r => r.teamId === managedTeamId);
+                    const ppg      = myRow && myRow.played > 0 ? myRow.points / myRow.played : 1.5;
+                    const demand   = calcDemand(position > 0 ? position : 10, ppg);
+                    const ticketRev = Math.round(calcTicketRevenue(priceLevel, demand, stadium.seats));
+                    const foodRev   = (staff.fishChips as number) > 0 ? FOOD_REVENUE_PER_MATCH : 0;
+                    const shopRev   = (staff.fanShop   as number) > 0 ? MERCH_REVENUE_PER_MATCH : 0;
+                    const mediaRev  = mediaDeal ? mediaDeal.revenuePerMatch : 0;
+                    const totalRev  = ticketRev + foodRev + shopRev + mediaRev;
+                    const rows: { label: string; amount: number; note: string }[] = [
+                      { label: 'Tickets',    amount: ticketRev, note: priceLevel },
+                      { label: 'Food stand', amount: foodRev,   note: (staff.fishChips as number) > 0 ? `Tier ${staff.fishChips} hired` : 'No staff hired' },
+                      { label: 'Fan shop',   amount: shopRev,   note: (staff.fanShop   as number) > 0 ? `Tier ${staff.fanShop} hired`   : 'No staff hired' },
+                      { label: 'Media deal', amount: mediaRev,  note: mediaDeal ? mediaDeal.name : 'No deal active' },
+                    ];
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', padding: '14px 18px', borderRadius: 16, background: '#0f1628', border: '1px solid #1c2640' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                          <div style={{ fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 800, fontSize: 22, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Revenue / Match</div>
+                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 15, color: '#5fd49a' }}>£{totalRev.toLocaleString()}</div>
+                        </div>
+                        {rows.map(({ label, amount, note }) => (
+                          <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: '1px solid #1c2640' }}>
+                            <div>
+                              <div style={{ fontWeight: 600, fontSize: 14 }}>{label}</div>
+                              <div style={{ fontSize: 12, color: amount > 0 ? '#8d99b5' : '#3d4f72', marginTop: 1, textTransform: 'capitalize' }}>{note}</div>
+                            </div>
+                            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 14, color: amount > 0 ? '#e8edf7' : '#3d4f72' }}>
+                              {amount > 0 ? `£${amount.toLocaleString()}` : '—'}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             )}
@@ -349,18 +378,24 @@ export function Desk() {
                       {(staff.coach as number) > 0 && (() => {
                         const c = COACHES.find(c => c.id === staff.coach)!;
                         return (
-                          <div style={{ display: 'flex', gap: 24, padding: '14px 18px', borderRadius: 12, background: '#0f1628', border: '1px solid #1c2640' }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 18px', borderRadius: 12, background: '#0f1628', border: '1px solid #1c2640' }}>
+                            <div style={{ display: 'flex', gap: 24 }}>
                             {([
                               { label: 'Heritage',  value: c.heritage },
                               { label: 'Star sign', value: c.starSign },
                               { label: 'Ideology',  value: c.ideology },
-                              { label: 'Salary',    value: `£${c.salary.toLocaleString()}`, color: '#5fd49a' as string },
+                              { label: 'Salary',    value: `£${c.salary.toLocaleString()}/match`, color: '#5fd49a' as string },
                             ]).map(({ label, value, color }) => (
                               <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                                 <div style={{ fontSize: 11, color: '#8d99b5', textTransform: 'uppercase', letterSpacing: '0.12em' }}>{label}</div>
                                 <div style={{ fontWeight: 700, fontSize: 14, color: color ?? '#e8edf7' }}>{value}</div>
                               </div>
                             ))}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 8, background: 'rgba(200,245,61,0.07)', border: '1px solid rgba(200,245,61,0.18)' }}>
+                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#c8f53d" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+                              <div style={{ fontSize: 13, color: '#c8f53d', fontWeight: 600 }}>{c.effect}</div>
+                            </div>
                           </div>
                         );
                       })()}
@@ -370,9 +405,10 @@ export function Desk() {
                           return (
                             <button key={c.id} onClick={() => setCoach(selected ? 0 : c.id)} style={{ display: 'flex', flexDirection: 'column', padding: 0, borderRadius: 12, border: `2px solid ${selected ? '#c8f53d' : '#1c2640'}`, background: 'transparent', cursor: 'pointer', overflow: 'hidden', textAlign: 'left' }}>
                               <img src={img(`${c.img}.png`)} alt={c.name} style={{ width: '100%', height: 160, objectFit: 'cover', imageRendering: 'pixelated', display: 'block' }} />
-                              <div style={{ padding: '10px 12px 12px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              <div style={{ padding: '10px 12px 12px', display: 'flex', flexDirection: 'column', gap: 3 }}>
                                 <div style={{ fontWeight: 700, fontSize: 14, color: selected ? '#c8f53d' : '#e8edf7', fontFamily: "'Barlow', system-ui, sans-serif" }}>{c.name}</div>
-                                <div style={{ fontSize: 12, color: '#8d99b5', fontFamily: "'Barlow', system-ui, sans-serif" }}>£{c.salary.toLocaleString()}/season</div>
+                                <div style={{ fontSize: 12, color: '#8d99b5', fontFamily: "'Barlow', system-ui, sans-serif" }}>£{c.salary.toLocaleString()}/match</div>
+                                <div style={{ fontSize: 11, color: '#6b7797', fontFamily: "'Barlow', system-ui, sans-serif", marginTop: 2 }}>{c.effect}</div>
                               </div>
                             </button>
                           );
