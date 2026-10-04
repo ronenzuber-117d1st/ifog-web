@@ -537,7 +537,7 @@ export const useGameStore = create<GameStore>()(
 
       acceptBorderDeal: (deal) => {
         const { borderSponsors } = get();
-        if (borderSponsors.length >= 3) return;
+        if (borderSponsors.length >= 4) return;
         const cappedDeal = { ...deal, matchdays: Math.min(8, deal.matchdays), matchdaysLeft: Math.min(8, deal.matchdaysLeft) };
         set({ borderSponsors: [...borderSponsors, cappedDeal] });
       },

@@ -7,6 +7,31 @@ import { img } from '../utils/images';
 import type { Formation, MatchEvent, MatchReport, Team, Player } from '../types/game';
 import { simulateFullMatch } from '../engine/matchEngine';
 
+function MatchTeamLogo({ team, side }: { team: Team; side: 'home' | 'away' }) {
+  const src = img(`wappen${String(team.id).padStart(2, '0')}.png`);
+  const accent = side === 'home' ? '#6aa8ff' : '#ff6b63';
+  const bg = side === 'home' ? '#14244a' : '#3a1418';
+  const fallbackColor = side === 'home' ? '#6aa8ff' : '#ff8a83';
+  const initials = team.name.slice(0, 3).toUpperCase();
+  return (
+    <div style={{ width: 68, height: 68, borderRadius: '50%', border: `3px solid ${accent}`, background: bg, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <img
+        src={src}
+        alt={team.name}
+        style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 3 }}
+        onError={e => {
+          (e.currentTarget as HTMLImageElement).style.display = 'none';
+          (e.currentTarget.nextSibling as HTMLElement).style.display = 'flex';
+        }}
+      />
+      {/* fallback: initials */}
+      <span style={{ display: 'none', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', fontFamily: "'Big Shoulders Display', sans-serif", fontWeight: 800, fontSize: 20, color: fallbackColor }}>
+        {initials}
+      </span>
+    </div>
+  );
+}
+
 const REFEREES = [
   { name: 'R. Ironside',  style: 'STRICT',      desc: 'Books everything. Zero tolerance.',      bribeable: false, color: '#f87171', img: 'schieds4.png' },
   { name: 'P. Softglove', style: 'LENIENT',     desc: 'Easy-going. Lets the game flow.',        bribeable: false, color: '#4ade80', img: 'schieds5.png' },
@@ -476,7 +501,7 @@ function SetupPhase({ myTeam, opponent, isHome, currentMatchday, myPlayers, form
 
         {/* Home */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 18, paddingLeft: 28, position: 'relative' }}>
-          <div style={{ width: 68, height: 68, borderRadius: '50%', border: '3px solid #6aa8ff', background: '#14244a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Big Shoulders Display', sans-serif", fontWeight: 800, fontSize: 20, color: '#6aa8ff', flexShrink: 0 }}>{homeAbbr}</div>
+          <MatchTeamLogo team={homeTeam} side="home" />
           <div>
             <div style={{ fontFamily: "'Big Shoulders Display', sans-serif", fontWeight: 800, fontSize: 36, textTransform: 'uppercase', lineHeight: 1 }}>{homeTeam.name}</div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
@@ -501,7 +526,7 @@ function SetupPhase({ myTeam, opponent, isHome, currentMatchday, myPlayers, form
               <span style={{ padding: '2px 8px', borderRadius: 4, background: !isHome ? '#c8f53d' : '#1c2a4e', color: !isHome ? '#070b16' : '#9cc4ff', fontWeight: 700, fontSize: 11, letterSpacing: '0.1em' }}>{!isHome ? 'YOU · AWAY' : 'AWAY'}</span>
             </div>
           </div>
-          <div style={{ width: 68, height: 68, borderRadius: '50%', border: '3px solid #ff6b63', background: '#3a1418', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Big Shoulders Display', sans-serif", fontWeight: 800, fontSize: 20, color: '#ff8a83', flexShrink: 0 }}>{awayAbbr}</div>
+          <MatchTeamLogo team={awayTeam} side="away" />
         </div>
       </section>
 

@@ -12,7 +12,7 @@ export const LEAGUE_TEAMS: Team[] = [
   { id: 9,  name: 'Foxes',        managerName: 'Martino Neill',   baseSkill: 56, color: '#2563EB' },
   { id: 10, name: 'Reds',         managerName: 'Roy Evens',       baseSkill: 56, color: '#EF4444' },
   { id: 11, name: 'Red Devils',   managerName: 'Fergus Alexson',  baseSkill: 55, color: '#DC2626' },
-  { id: 12, name: 'Magpies',      managerName: 'Kevin Kneegan',   baseSkill: 55, color: '#111827' },
+  { id: 12, name: 'Magpies',      managerName: 'Kevin Kneegan',   baseSkill: 55, color: '#CBD5E1' },
   { id: 13, name: 'Forest',       managerName: 'Frank Clerk',     baseSkill: 54, color: '#DC2626' },
   { id: 14, name: 'The Owls',     managerName: 'David Plate',     baseSkill: 54, color: '#1D4ED8' },
   { id: 15, name: 'The Saints',   managerName: 'Graham Soonis',   baseSkill: 53, color: '#DC2626' },

@@ -5,6 +5,29 @@ import { LEAGUE_TEAMS } from '../data/teams';
 import { EventModal } from '../components/EventModal';
 import { Layout } from '../components/Layout';
 import { img } from '../utils/images';
+import type { Team } from '../types/game';
+
+function TeamLogo({ team }: { team: Team }) {
+  const src = img(`wappen${String(team.id).padStart(2, '0')}.png`);
+  const initials = team.name.replace(/^The /, '').slice(0, 3).toUpperCase();
+  return (
+    <div style={{ width: 56, height: 56, borderRadius: '50%', border: `3px solid ${team.color}`, background: team.color + '22', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+      <img
+        src={src}
+        alt={team.name}
+        style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 2 }}
+        onError={e => {
+          (e.currentTarget as HTMLImageElement).style.display = 'none';
+          (e.currentTarget.nextSibling as HTMLElement).style.display = 'flex';
+        }}
+      />
+      {/* fallback: initials circle */}
+      <span style={{ display: 'none', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 800, fontSize: 17, color: team.color }}>
+        {initials}
+      </span>
+    </div>
+  );
+}
 
 const FORM_COLOR = { W: '#5fd49a', D: '#8d99b5', L: '#ff7a6b' } as const;
 
@@ -207,9 +230,7 @@ export function SeasonHub() {
                 <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto minmax(0,1fr)', alignItems: 'center', gap: 10, position: 'relative' }}>
                   {/* Home */}
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                    <div style={{ width: 56, height: 56, borderRadius: '50%', border: `3px solid ${matchHomeTeam.color}`, background: matchHomeTeam.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 800, fontSize: 17, color: matchHomeTeam.color }}>
-                      {matchHomeTeam.name.replace(/^The /, '').slice(0, 3).toUpperCase()}
-                    </div>
+                    <TeamLogo team={matchHomeTeam} />
                     <div style={{ fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 800, fontSize: 20, textTransform: 'uppercase', lineHeight: 1, textAlign: 'center' }}>{matchHomeTeam.name}</div>
                     <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: homeIsMe ? '#c8f53d' : '#9cc4ff' }}>
                       {homeIsMe ? 'YOU · ' : ''}HOME · {matchHomePos}{ordinal(matchHomePos)}
@@ -218,9 +239,7 @@ export function SeasonHub() {
                   <div style={{ fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 900, fontSize: 34, color: '#3a4768' }}>VS</div>
                   {/* Away */}
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                    <div style={{ width: 56, height: 56, borderRadius: '50%', border: `3px solid ${matchAwayTeam.color}`, background: matchAwayTeam.color + '22', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 800, fontSize: 17, color: matchAwayTeam.color }}>
-                      {matchAwayTeam.name.replace(/^The /, '').slice(0, 3).toUpperCase()}
-                    </div>
+                    <TeamLogo team={matchAwayTeam} />
                     <div style={{ fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 800, fontSize: 20, textTransform: 'uppercase', lineHeight: 1, textAlign: 'center' }}>{matchAwayTeam.name}</div>
                     <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', color: !homeIsMe ? '#c8f53d' : '#9cc4ff' }}>
                       {!homeIsMe ? 'YOU · ' : ''}AWAY · {matchAwayPos}{ordinal(matchAwayPos)}
