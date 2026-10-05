@@ -42,7 +42,7 @@ export function TeamManagement() {
   const {
     managedTeamId, rosters, formation, setFormation, table,
     trainingMassage, trainingSkills, trainingShape, setTraining,
-    startingXI, setStartingXI,
+    startingXI, setStartingXI, balance, bookPracticeMatch, stadium,
   } = useGameStore();
 
   const [mainTab, setMainTab]   = useState<MainTab>('team');
@@ -51,7 +51,7 @@ export function TeamManagement() {
   const [statsPos, setStatsPos] = useState<string>('All');
   const [sortKey, setSortKey]   = useState<string>('idx');
   const [sortDir, setSortDir]   = useState<1 | -1>(1);
-  const [confirmed, setConfirmed] = useState(false);
+  const [practiceBooked, setPracticeBooked] = useState(false);
 
   const players = rosters[managedTeamId] ?? [];
   const tablePos = table.findIndex(r => r.teamId === managedTeamId) + 1;
@@ -99,7 +99,9 @@ export function TeamManagement() {
   /* ── Training ── */
   const tv = { massage: trainingMassage, skills: trainingSkills, shape: trainingShape };
   const used = trainingMassage + trainingSkills + trainingShape;
-  const remaining = 7 - used;
+  const allAtLevel = (lvl: number) => stadium.pitch >= lvl && stadium.seats >= lvl && stadium.facilities >= lvl && stadium.lights >= lvl;
+  const maxUnits = allAtLevel(3) ? 10 : allAtLevel(2) ? 9 : 7;
+  const remaining = maxUnits - used;
 
   const motivation = Math.min(100, Math.round(50 + trainingMassage * 5));
   const skillStat  = Math.min(100, Math.round(50 + trainingSkills * 5));
@@ -109,10 +111,9 @@ export function TeamManagement() {
 
   const adjustTraining = (key: 'massage' | 'skills' | 'shape', delta: number) => {
     const cur = tv[key];
-    const next = Math.max(0, Math.min(7, cur + delta));
+    const next = Math.max(0, Math.min(maxUnits, cur + delta));
     if (delta > 0 && remaining <= 0) return;
     setTraining(key, next);
-    setConfirmed(false);
   };
 
   /* ── Statistics ── */
@@ -313,7 +314,7 @@ export function TeamManagement() {
             </div>
 
             {/* Center: allocation — row 1 */}
-            <div style={{ gridColumn: 2, gridRow: 1, display: 'flex', flexDirection: 'column', gap: 14, padding: '18px 20px', borderRadius: 16, background: '#0f1628', border: '1px solid #1c2640', overflow: 'hidden', minHeight: 0 }}>
+            <div style={{ gridColumn: 2, gridRow: 1, display: 'flex', flexDirection: 'column', gap: 10, padding: '16px 20px 16px', borderRadius: 16, background: '#0f1628', border: '1px solid #1c2640', overflowY: 'auto', minHeight: 0 }}>
               {/* Header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexShrink: 0 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -327,7 +328,7 @@ export function TeamManagement() {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#3d4f72' }}>
                     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
-                    7 / 10 max · upgrade facilities to unlock more
+                    {maxUnits} / 10 max{maxUnits < 10 ? ' · upgrade all stadium features to unlock more' : ' · max reached'}
                   </div>
                 </div>
               </div>
@@ -340,32 +341,34 @@ export function TeamManagement() {
                 const v = tv[key];
                 const focused = focusIdx === fi;
                 return (
-                  <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 16, borderRadius: 12, background: focused ? '#131c33' : 'transparent', border: `1px solid ${focused ? color : '#1c2640'}` }}>
+                  <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 14px', borderRadius: 12, background: focused ? '#131c33' : 'transparent', border: `1px solid ${focused ? color : '#1c2640'}` }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ fontWeight: 700, fontSize: 16 }}>{label}</div>
-                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 18, color }}>{v}</div>
+                      <div style={{ fontWeight: 700, fontSize: 15 }}>{label}</div>
+                      <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 16, color }}>{v}</div>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '44px minmax(0,1fr) 44px', gap: 12, alignItems: 'center' }}>
-                      <TrainBtn onClick={() => { adjustTraining(key, -1); setFocusIdx(fi); }} disabled={v <= 0}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M5 12h14"/></svg></TrainBtn>
+                    <div style={{ display: 'grid', gridTemplateColumns: '36px minmax(0,1fr) 36px', gap: 10, alignItems: 'center' }}>
+                      <TrainBtn onClick={() => { adjustTraining(key, -1); setFocusIdx(fi); }} disabled={v <= 0}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M5 12h14"/></svg></TrainBtn>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0,1fr))', gap: 4 }}>
-                        {Array.from({ length: 7 }, (_, k) => (
-                          <div key={k} style={{ height: 14, borderRadius: 3, background: k < v ? color : '#1f2945' }} />
+                        {Array.from({ length: maxUnits }, (_, k) => (
+                          <div key={k} style={{ height: 11, borderRadius: 3, background: k < v ? color : '#1f2945' }} />
                         ))}
                       </div>
-                      <TrainBtn onClick={() => { adjustTraining(key, 1); setFocusIdx(fi); }} disabled={remaining <= 0 || v >= 7}><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg></TrainBtn>
+                      <TrainBtn onClick={() => { adjustTraining(key, 1); setFocusIdx(fi); }} disabled={remaining <= 0 || v >= maxUnits}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round"><path d="M12 5v14"/><path d="M5 12h14"/></svg></TrainBtn>
                     </div>
                   </div>
                 );
               })}
             </div>
 
-            {/* Confirm Training button — row 2, col 2 */}
-            <button
-              onClick={() => setConfirmed(true)}
-              style={{ gridColumn: 2, gridRow: 2, borderRadius: 12, border: '2px solid transparent', background: confirmed ? '#8d99b5' : '#c8f53d', color: '#070b16', fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 900, fontSize: 22, letterSpacing: '0.14em', textTransform: 'uppercase', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >
-              {confirmed ? '✓ Training confirmed' : 'Confirm training'}
-            </button>
+            {/* Training info bar — row 2, col 2 */}
+            <div style={{ gridColumn: 2, gridRow: 2, borderRadius: 12, border: '1px solid #1c2640', background: '#0f1628', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 18px', gap: 16 }}>
+              <div style={{ fontSize: 12, color: '#4b5675' }}>✓ Plan auto-saves · applied before each match</div>
+              <div style={{ display: 'flex', gap: 16, fontSize: 12 }}>
+                <span style={{ color: '#5fd49a' }}>Massage → morale &amp; injury risk</span>
+                <span style={{ color: '#7fb2ff' }}>Skills → attack boost</span>
+                <span style={{ color: '#f5b94a' }}>Shape → performance mod</span>
+              </div>
+            </div>
 
             {/* Right: condition + practice match — row 1 */}
             <aside style={{ gridColumn: 3, gridRow: 1, display: 'flex', flexDirection: 'column', gap: 16, minHeight: 0, overflow: 'hidden' }}>
@@ -387,11 +390,22 @@ export function TeamManagement() {
             </aside>
 
             {/* Book Practice Match button — row 2, col 3 */}
-            <button
-              style={{ gridColumn: 3, gridRow: 2, borderRadius: 12, border: '2px solid #c8f53d', background: 'transparent', color: '#c8f53d', fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 900, fontSize: 22, letterSpacing: '0.14em', textTransform: 'uppercase', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-            >
-              Book practice match
-            </button>
+            {(() => {
+              const canAfford = balance >= 87_300;
+              const disabled = practiceBooked || !canAfford;
+              const label = practiceBooked ? '✓ Practice booked' : !canAfford ? 'Insufficient funds' : 'Book practice match';
+              const borderColor = practiceBooked ? '#8d99b5' : canAfford ? '#c8f53d' : '#374151';
+              const color = practiceBooked ? '#8d99b5' : canAfford ? '#c8f53d' : '#374151';
+              return (
+                <button
+                  disabled={disabled}
+                  onClick={() => { bookPracticeMatch(); setPracticeBooked(true); }}
+                  style={{ gridColumn: 3, gridRow: 2, borderRadius: 12, border: `2px solid ${borderColor}`, background: 'transparent', color, fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 900, fontSize: 22, letterSpacing: '0.14em', textTransform: 'uppercase', cursor: disabled ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  {label}
+                </button>
+              );
+            })()}
 
           </main>
         )}

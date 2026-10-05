@@ -21,31 +21,8 @@ const SHIRT_COMPANIES = [
   { name: 'KickKing',               pitch: "Kings of the pitch. Let's make it official." },
 ];
 
-// ─── Board brands ─────────────────────────────────────────────────────────────
-interface BoardStyle {
-  bg: string; fg: string; ac: string;
-  font: string; fw: number; ls: string; tt: string; fi: string;
-  pre: string; text: string; post: string;
-}
-
-const BOARD_STYLES: Record<string, BoardStyle> = {
-  'FootballHub':      { bg: '#1d4ed8', fg: '#ffffff', ac: '#facc15', font: "'Russo One', sans-serif", fw: 400, ls: '0.12em', tt: 'uppercase', fi: 'normal', pre: '●', text: 'FootballHub', post: '' },
-  'SportsBet Pro':    { bg: 'repeating-linear-gradient(135deg, #0b0b0b 0 14px, #1d1d1d 14px 28px)', fg: '#facc15', ac: '#ffffff', font: "'Big Shoulders Display', Impact, sans-serif", fw: 900, ls: '0.06em', tt: 'uppercase', fi: 'italic', pre: '', text: 'SportsBet Pro', post: 'BET SMART' },
-  'Grub Club':        { bg: '#f97316', fg: '#1c0a00', ac: '#ffffff', font: "'Bangers', cursive", fw: 400, ls: '0.08em', tt: 'uppercase', fi: 'normal', pre: '', text: 'Grub Club', post: 'EAT UP!' },
-  'Turbo Tyres':      { bg: 'linear-gradient(90deg, #0b0b0b 0 16px, #dc2626 16px calc(100% - 16px), #0b0b0b calc(100% - 16px))', fg: '#ffffff', ac: '#0b0b0b', font: "'Russo One', sans-serif", fw: 400, ls: '0.04em', tt: 'uppercase', fi: 'italic', pre: '»»', text: 'Turbo Tyres', post: '' },
-  'Lucky Duck Bingo': { bg: '#fde047', fg: '#be185d', ac: '#be185d', font: "'Pacifico', cursive", fw: 400, ls: '0', tt: 'none', fi: 'normal', pre: '★', text: 'Lucky Duck Bingo', post: '' },
-  'Mega Mop':         { bg: '#0d9488', fg: '#ffffff', ac: '#99f6e4', font: "'Bungee', sans-serif", fw: 400, ls: '0.04em', tt: 'uppercase', fi: 'normal', pre: '', text: 'Mega Mop', post: 'SQUEAKY CLEAN' },
-  'Fizzle Pop':       { bg: 'radial-gradient(circle, rgba(255,255,255,0.28) 2px, transparent 3px) 0 0 / 18px 18px, #7c3aed', fg: '#ffffff', ac: '#fde047', font: "'Bangers', cursive", fw: 400, ls: '0.1em', tt: 'uppercase', fi: 'normal', pre: '', text: 'Fizzle Pop!', post: '' },
-};
-
-const BOARD_EMPTY: BoardStyle = {
-  bg: 'repeating-linear-gradient(135deg, #141a2a 0 10px, #181f31 10px 20px)',
-  fg: 'rgba(255,255,255,0.35)', ac: 'transparent',
-  font: "'JetBrains Mono', monospace", fi: 'normal', fw: 700, ls: '0.2em', tt: 'uppercase',
-  pre: '', text: 'Your ad here', post: '',
-};
-
-const BORDER_COMPANIES = Object.keys(BOARD_STYLES);
+import { BOARD_STYLES, BOARD_EMPTY, BORDER_COMPANIES } from '../data/boardStyles';
+import type { BoardStyle } from '../data/boardStyles';
 
 // ─── Seeded RNG ───────────────────────────────────────────────────────────────
 function lcg(seed: number) {
@@ -56,16 +33,17 @@ function lcg(seed: number) {
 // ─── Offer generators ─────────────────────────────────────────────────────────
 interface ShirtOffer extends SponsorDeal { pitch: string; }
 
-function generateShirtOffers(matchday: number, teamId: number): ShirtOffer[] {
-  const rng = lcg(matchday * 1337 + teamId * 7);
+function generateShirtOffers(matchday: number, teamId: number, sessionSeed: number): ShirtOffer[] {
+  const rng = lcg(matchday * 1337 + teamId * 7 + sessionSeed);
   const pool = [...SHIRT_COMPANIES];
   const picked: typeof SHIRT_COMPANIES = [];
   for (let i = 0; i < 5 && pool.length > 0; i++) {
     const idx = Math.floor(rng() * pool.length);
     picked.push(pool.splice(idx, 1)[0]);
   }
-  return picked.map((co, slot) => {
-    const r = lcg(matchday * 1337 + teamId * 7 + (slot + 1) * 883);
+  return picked.map(co => {
+    const nameSeed = co.name.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+    const r = lcg(matchday * 1337 + teamId * 7 + nameSeed);
     return {
       name: co.name,
       amount: Math.round((r() * 900_000 + 200_000) / 50_000) * 50_000,
@@ -77,16 +55,19 @@ function generateShirtOffers(matchday: number, teamId: number): ShirtOffer[] {
 
 interface BorderOffer { name: string; amt: number; len: number; }
 
-function generateBorderOffers(matchday: number, teamId: number): BorderOffer[] {
-  const rng = lcg(matchday * 2673 + teamId * 13);
-  const pool = [...BORDER_COMPANIES];
+function generateBorderOffers(matchday: number, teamId: number, activeNames: string[], sessionSeed: number): BorderOffer[] {
+  // Shuffle order uses session seed so it differs every visit
+  const rng = lcg(matchday * 2673 + teamId * 13 + sessionSeed);
+  const pool = BORDER_COMPANIES.filter(name => !activeNames.includes(name));
   const picked: string[] = [];
   for (let i = 0; i < 5 && pool.length > 0; i++) {
     const idx = Math.floor(rng() * pool.length);
     picked.push(pool.splice(idx, 1)[0]);
   }
-  return picked.map((name, slot) => {
-    const r = lcg(matchday * 2673 + teamId * 13 + (slot + 1) * 997);
+  return picked.map(name => {
+    // Amounts seeded by name + matchday (not position) so same company = same deal terms this matchday
+    const nameSeed = name.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+    const r = lcg(matchday * 2673 + teamId * 13 + nameSeed);
     return { name, amt: Math.round((r() * 55_000 + 15_000) / 5_000) * 5_000, len: Math.floor(r() * 5) + 4 };
   });
 }
@@ -145,9 +126,10 @@ function Board({ s, sz }: { s: BoardStyle; sz: number }) {
 export function Finances() {
   const { managedTeamId, currentMatchday, balance, shirtSponsor, borderSponsors, rosters, transfersUsed, acceptShirtSponsor, acceptBorderDeal, hirePlayer, sellPlayer } = useGameStore();
   const [tab, setTab] = useState<Tab>('shirt');
+  const [sessionSeed] = useState(() => Math.floor(Math.random() * 999983));
 
-  const shirtOffers = useMemo(() => generateShirtOffers(currentMatchday, managedTeamId), [currentMatchday, managedTeamId]);
-  const borderOffers = useMemo(() => generateBorderOffers(currentMatchday, managedTeamId), [currentMatchday, managedTeamId]);
+  const shirtOffers = useMemo(() => generateShirtOffers(currentMatchday, managedTeamId, sessionSeed), [currentMatchday, managedTeamId, sessionSeed]);
+  const borderOffers = useMemo(() => generateBorderOffers(currentMatchday, managedTeamId, borderSponsors.map(s => s.name), sessionSeed), [currentMatchday, managedTeamId, borderSponsors, sessionSeed]);
   const hirePlayers = useMemo(() => generateHirePlayers(currentMatchday, managedTeamId), [currentMatchday, managedTeamId]);
   const myPlayers = rosters[managedTeamId] ?? [];
   const transfersLeft = 3 - transfersUsed;
@@ -276,7 +258,7 @@ function ShirtTab({ shirtSponsor, shirtOffers, onAccept }: {
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated', display: 'block' }}
           />
           {activeName ? (
-            <div style={{ position: 'absolute', left: '50%', top: '36%', width: 230, transform: 'translateX(-50%) rotate(-3deg)', textAlign: 'center', fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 900, fontSize: chestSz, lineHeight: 0.95, textTransform: 'uppercase', color: '#d9264a', letterSpacing: '0.02em', pointerEvents: 'none' }}>
+            <div style={{ position: 'absolute', left: '54%', top: '43%', width: 230, transform: 'translateX(-50%) rotate(-3deg)', textAlign: 'center', fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 900, fontSize: chestSz, lineHeight: 0.95, textTransform: 'uppercase', color: '#d9264a', letterSpacing: '0.02em', pointerEvents: 'none' }}>
               {activeName}
             </div>
           ) : (
@@ -374,7 +356,7 @@ function BordersTab({ borderSponsors, borderOffers, onAccept }: {
             </div>
           </div>
 
-          {!empty && cur && (
+          {!empty && cur && !full && (
             <>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 8 }}>
                 <div style={{ fontSize: 13, color: '#8d99b5' }}>{cur.name} wants this board:</div>
@@ -392,22 +374,20 @@ function BordersTab({ borderSponsors, borderOffers, onAccept }: {
                   <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 18 }}>{cur.len} matchdays</div>
                 </div>
               </div>
-              {full && (
-                <div style={{ padding: '8px 12px', borderRadius: 10, background: 'rgba(245,185,74,0.12)', color: '#f5c76b', fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
-                  All 4 boards are taken. Let a deal run out, or turn this one down.
-                </div>
-              )}
-              {!full && (
-                <div style={{ fontSize: 13, color: '#8d99b5', marginBottom: 8 }}>
-                  Worth <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: '#e8edf7' }}>{money(cur.amt * cur.len)}</span> over the deal
-                </div>
-              )}
-              {/* Buttons pinned to bottom */}
+              <div style={{ fontSize: 13, color: '#8d99b5', marginBottom: 8 }}>
+                Worth <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: '#e8edf7' }}>{money(cur.amt * cur.len)}</span> over the deal
+              </div>
               <div style={{ marginTop: 'auto', display: 'flex', gap: 10 }}>
-                <YeahhBtn onClick={() => { if (!full) { onAccept(cur); setOfferIdx(i => i + 1); } }} disabled={full} />
+                <YeahhBtn onClick={() => { onAccept(cur); setOfferIdx(i => i + 1); }} />
                 <ForgetBtn onClick={() => setOfferIdx(i => i + 1)} />
               </div>
             </>
+          )}
+
+          {!empty && full && (
+            <div style={{ padding: '12px 14px', borderRadius: 10, background: 'rgba(245,185,74,0.12)', color: '#f5c76b', fontSize: 13, fontWeight: 600 }}>
+              All 4 boards are taken. Let a deal run out before accepting new offers.
+            </div>
           )}
 
           {empty && (

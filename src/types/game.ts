@@ -46,9 +46,10 @@ export interface Fixture {
 
 export interface MatchEvent {
   minute: number;
-  type: 'goal' | 'yellow' | 'red' | 'save';
+  type: 'goal' | 'yellow' | 'red' | 'missed_penalty' | 'injury' | 'sub';
   teamId: number;
   playerName: string;
+  detail?: string; // goal: 'penalty'|'freekick'|'owngoal'; red: '2Y'; sub: incoming player name
 }
 
 export interface MatchReport {

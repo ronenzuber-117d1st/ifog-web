@@ -4,6 +4,7 @@ import { Layout } from '../components/Layout';
 import { img } from '../utils/images';
 import { TICKET_TYPES, TICKET_PRICE_PRESETS, FOOD_REVENUE_PER_MATCH, MERCH_REVENUE_PER_MATCH, calcTicketRevenue, calcDemand } from '../data/finances';
 import { LEAGUE_TEAMS } from '../data/teams';
+import type { FinanceEntry } from '../types/game';
 
 type DeskTab = 'desk' | 'personnel' | 'cash-season' | 'cash-week' | 'bets' | 'memo';
 type PersonnelSub = 'fishChips' | 'fanShop' | 'ticketSales' | 'cheerleader' | 'coach';
@@ -35,12 +36,23 @@ const TAB_LABELS: Record<DeskTab, string> = {
   'cash-week': 'Cash Week', bets: 'Bets', memo: 'Memo',
 };
 
-const EARN_CATS = ['Ticket sales', 'Advertising', 'Food stand', 'Radio & TV', 'Club shop', 'VIP lounge'];
-const COST_CATS = ['Stadium', 'Player purchase', 'Team wages', 'Bits & pieces', 'Personnel'];
+const EARN_CATS = ['Match day', 'Sponsorship', 'Media deal', 'Transfer fee', 'Betting', 'Ticket sales', 'Food stand', 'Club shop', 'VIP lounge'];
+const COST_CATS = ['Match day', 'Player purchase', 'Stadium', 'Personnel', 'Training', 'Bits & pieces', 'Betting'];
 
 function finCat(desc: string): string {
+  const lower = desc.toLowerCase();
+  if (lower.startsWith('home match') || lower.startsWith('away match')) return 'Match day';
+  if (lower.startsWith('border') || lower.startsWith('shirt sponsor')) return 'Sponsorship';
+  if (lower.startsWith('media:')) return 'Media deal';
+  if (lower.startsWith('transfer in:')) return 'Player purchase';
+  if (lower.startsWith('transfer out:')) return 'Transfer fee';
+  if (lower.startsWith('stadium upgrade:')) return 'Stadium';
+  if (lower === 'practice match') return 'Training';
+  if (lower === 'referee bribe') return 'Bits & pieces';
+  if (lower === 'personnel costs') return 'Personnel';
+  if (lower.startsWith('bet')) return 'Betting';
   for (const c of [...EARN_CATS, ...COST_CATS]) {
-    if (desc.toLowerCase().includes(c.toLowerCase())) return c;
+    if (lower.includes(c.toLowerCase())) return c;
   }
   return 'Other';
 }
@@ -440,6 +452,7 @@ export function Desk() {
                   <FinancePanel title="Earnings" color="#5fd49a" sign="+" entries={EARN_CATS.map(c => ({ label: c, amount: seasonFinance.earn[c] ?? 0 }))} />
                   <FinancePanel title="Costs"    color="#ff7a6b" sign="-" entries={COST_CATS.map(c => ({ label: c, amount: seasonFinance.cost[c] ?? 0 }))} />
                 </div>
+                <TransactionLog entries={financeHistory.filter(e => e.matchday > 0)} showMatchday />
               </div>
             )}
 
@@ -475,6 +488,7 @@ export function Desk() {
                   <FinancePanel title="Earnings" color="#5fd49a" sign="+" entries={EARN_CATS.map(c => ({ label: c, amount: weekFinance.earn[c] ?? 0 }))} />
                   <FinancePanel title="Costs"    color="#ff7a6b" sign="-" entries={COST_CATS.map(c => ({ label: c, amount: weekFinance.cost[c] ?? 0 }))} />
                 </div>
+                <TransactionLog entries={financeHistory.filter(e => e.matchday === cashWeekDay)} />
               </div>
             )}
 
@@ -645,6 +659,35 @@ function ToggleRow({ label, sub, value, onChange }: { label: string; sub: string
       <button onClick={() => onChange(!value)} style={{ position: 'relative', width: 52, height: 28, borderRadius: 14, cursor: 'pointer', background: value ? '#16a34a' : '#1c2640', border: `1px solid ${value ? '#22c55e' : '#2a3656'}` }}>
         <div style={{ position: 'absolute', top: 4, width: 18, height: 18, background: '#fff', borderRadius: '50%', transition: 'left 0.15s', left: value ? '28px' : '4px' }} />
       </button>
+    </div>
+  );
+}
+
+function TransactionLog({ entries, showMatchday }: { entries: FinanceEntry[]; showMatchday?: boolean }) {
+  const sorted = [...entries].sort((a, b) => b.matchday - a.matchday);
+  if (sorted.length === 0) return (
+    <div style={{ padding: '16px 20px', borderRadius: 16, background: '#0f1628', border: '1px solid #1c2640', color: '#6b7797', fontSize: 14 }}>No transactions yet.</div>
+  );
+  return (
+    <div style={{ borderRadius: 16, background: '#0f1628', border: '1px solid #1c2640', overflow: 'hidden' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: showMatchday ? '52px 1fr auto 120px' : '1fr auto 120px', gap: 12, padding: '10px 18px', borderBottom: '1px solid #1c2640' }}>
+        {showMatchday && <div style={{ fontSize: 11, color: '#8d99b5', textTransform: 'uppercase', letterSpacing: '0.14em', fontWeight: 600 }}>MD</div>}
+        <div style={{ fontSize: 11, color: '#8d99b5', textTransform: 'uppercase', letterSpacing: '0.14em', fontWeight: 600 }}>Description</div>
+        <div style={{ fontSize: 11, color: '#8d99b5', textTransform: 'uppercase', letterSpacing: '0.14em', fontWeight: 600, textAlign: 'right' }}>Amount</div>
+        <div style={{ fontSize: 11, color: '#8d99b5', textTransform: 'uppercase', letterSpacing: '0.14em', fontWeight: 600, textAlign: 'right' }}>Balance</div>
+      </div>
+      {sorted.map((e, i) => (
+        <div key={i} style={{ display: 'grid', gridTemplateColumns: showMatchday ? '52px 1fr auto 120px' : '1fr auto 120px', gap: 12, padding: '10px 18px', borderTop: '1px solid #131c33', alignItems: 'center' }}>
+          {showMatchday && <div style={{ fontSize: 12, color: '#f5c76b', fontWeight: 700 }}>{e.matchday}</div>}
+          <div style={{ fontSize: 13, color: '#c2cbe0' }}>{e.description}</div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 13, fontWeight: 700, color: e.amount >= 0 ? '#5fd49a' : '#ff7a6b', textAlign: 'right', whiteSpace: 'nowrap' }}>
+            {e.amount >= 0 ? '+' : ''}£{e.amount.toLocaleString()}
+          </div>
+          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 12, color: '#8d99b5', textAlign: 'right', whiteSpace: 'nowrap' }}>
+            £{e.running.toLocaleString()}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

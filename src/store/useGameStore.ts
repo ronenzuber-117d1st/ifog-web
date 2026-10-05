@@ -100,7 +100,7 @@ export interface GameStore {
   mediaDeal: MediaDeal | null;
 
   startNewGame: (managerName: string, teamId: number, portrait?: string, difficulty?: Difficulty) => void;
-  playMatchday: () => void;
+  playMatchday: (liveReport?: MatchReport) => void;
   setFormation: (f: Formation) => void;
   setStartingXI: (ids: string[]) => void;
   trainPlayer: (playerId: string) => void;
@@ -123,6 +123,7 @@ export interface GameStore {
   cancelBet: () => void;
   signMediaDeal: (deal: MediaDeal) => void;
   cancelMediaDeal: () => void;
+  bookPracticeMatch: () => void;
 }
 
 function makeTableRow(teamId: number): TableRow {
@@ -196,9 +197,9 @@ export const useGameStore = create<GameStore>()(
       priceLevel: 'medium',
       foodEnabled: true,
       merchandiseEnabled: true,
-      trainingMassage: 3,
+      trainingMassage: 1,
       trainingSkills: 4,
-      trainingShape: 3,
+      trainingShape: 2,
       transfersUsed: 0,
       shirtSponsor: null,
       borderSponsors: [],
@@ -240,9 +241,9 @@ export const useGameStore = create<GameStore>()(
           priceLevel: 'medium',
           foodEnabled: true,
           merchandiseEnabled: true,
-          trainingMassage: 3,
+          trainingMassage: 1,
           trainingSkills: 4,
-          trainingShape: 3,
+          trainingShape: 2,
           transfersUsed: 0,
           shirtSponsor: null,
           borderSponsors: [],
@@ -254,7 +255,7 @@ export const useGameStore = create<GameStore>()(
         });
       },
 
-      playMatchday: () => {
+      playMatchday: (liveReport?: MatchReport) => {
         const s = get();
         const { currentMatchday, fixtures, rosters, managedTeamId, formation, startingXI, table, balance, financeHistory, managerName, priceLevel, foodEnabled, merchandiseEnabled, trainingSkills, trainingShape, borderSponsors, stadium, difficulty, staff, pendingBet, eventLog, mediaDeal } = s;
         const xiSet = new Set(startingXI ?? []);
@@ -280,26 +281,31 @@ export const useGameStore = create<GameStore>()(
 
           if (fixture.homeTeamId === managedTeamId || fixture.awayTeamId === managedTeamId) {
             const isHome = fixture.homeTeamId === managedTeamId;
-            const xiHomePlayers = isHome
-              ? homePlayers.filter(p => xiSet.size > 0 ? xiSet.has(p.id) : true)
-              : homePlayers;
-            const xiAwayPlayers = !isHome
-              ? awayPlayers.filter(p => xiSet.size > 0 ? xiSet.has(p.id) : true)
-              : awayPlayers;
-            const report = simulateFullMatch(
-              fixture, homeTeam, awayTeam, xiHomePlayers, xiAwayPlayers,
-              isHome ? formation : '4-4-2',
-              trainingMod,
-            );
-            homeGoals = report.fixture.homeGoals!;
-            awayGoals = report.fixture.awayGoals!;
-            // Bob Robinson (Chaotic): ±1 goal swing
-            if (staff.coach === 1) {
-              const swing = Math.random() < 0.5 ? 1 : -1;
-              if (isHome) homeGoals = Math.max(0, homeGoals + swing);
-              else awayGoals = Math.max(0, awayGoals + swing);
+            if (liveReport && liveReport.fixture.id === fixture.id) {
+              homeGoals = liveReport.fixture.homeGoals!;
+              awayGoals = liveReport.fixture.awayGoals!;
+              lastMatch = liveReport;
+            } else {
+              const xiHomePlayers = isHome
+                ? homePlayers.filter(p => xiSet.size > 0 ? xiSet.has(p.id) : true)
+                : homePlayers;
+              const xiAwayPlayers = !isHome
+                ? awayPlayers.filter(p => xiSet.size > 0 ? xiSet.has(p.id) : true)
+                : awayPlayers;
+              const report = simulateFullMatch(
+                fixture, homeTeam, awayTeam, xiHomePlayers, xiAwayPlayers,
+                isHome ? formation : '4-4-2',
+                trainingMod,
+              );
+              homeGoals = report.fixture.homeGoals!;
+              awayGoals = report.fixture.awayGoals!;
+              if (staff.coach === 1) {
+                const swing = Math.random() < 0.5 ? 1 : -1;
+                if (isHome) homeGoals = Math.max(0, homeGoals + swing);
+                else awayGoals = Math.max(0, awayGoals + swing);
+              }
+              lastMatch = { ...report, fixture: { ...report.fixture, homeGoals, awayGoals } };
             }
-            lastMatch = { ...report, fixture: { ...report.fixture, homeGoals, awayGoals } };
           } else {
             const result = simulateMatch(homeTeam, awayTeam, homePlayers, awayPlayers, '4-4-2', '4-4-2', 1);
             homeGoals = result.homeGoals;
@@ -389,8 +395,10 @@ export const useGameStore = create<GameStore>()(
 
         const finalBalance = newBalance + betResult;
 
-        const newEventLog = event
-          ? [...eventLog, { matchday: currentMatchday, text: event.text.replace(/X/g, lastMatch?.events?.find(e => e.type === 'goal')?.playerName ?? 'a player') }]
+        const scorerName = lastMatch?.events?.find(e => e.type === 'goal')?.playerName ?? 'a player';
+        const pendingEventResolved = event ? { ...event, text: event.text.replace(/X/g, scorerName) } : null;
+        const newEventLog = pendingEventResolved
+          ? [...eventLog, { matchday: currentMatchday, text: pendingEventResolved.text }]
           : eventLog;
 
         let adjustedTable = newTable;
@@ -472,7 +480,7 @@ export const useGameStore = create<GameStore>()(
           fixtures: updatedFixtures,
           table: adjustedTable,
           lastMatch,
-          pendingEvent: event,
+          pendingEvent: pendingEventResolved,
           balance: finalBalance,
           financeHistory: [...financeHistory, ...entries, ...staffEntry, ...betEntry],
           currentMatchday: currentMatchday + 1,
@@ -631,9 +639,35 @@ export const useGameStore = create<GameStore>()(
       cancelBet: () => set({ pendingBet: null }),
       signMediaDeal: (deal) => set({ mediaDeal: deal }),
       cancelMediaDeal: () => set({ mediaDeal: null }),
+      bookPracticeMatch: () => {
+        const { rosters, managedTeamId, balance, financeHistory, currentMatchday } = get();
+        const cost = 87_300;
+        if (balance < cost) return;
+        const updated = (rosters[managedTeamId] ?? []).map(p => {
+          if (p.injuredFor > 0 || p.suspended) return p;
+          const newProgress = p.trainingProgress + 1;
+          if (newProgress >= 5) return { ...p, skill: Math.min(9, p.skill + 1), trainingProgress: 0 };
+          return { ...p, trainingProgress: newProgress };
+        });
+        set({
+          balance: balance - cost,
+          rosters: { ...rosters, [managedTeamId]: updated },
+          financeHistory: [...financeHistory, { matchday: currentMatchday, description: 'Practice match', amount: -cost, running: balance - cost }],
+        });
+      },
     }),
     {
       name: 'ifog-game-state',
+      version: 1,
+      migrate: (state: any) => {
+        const total = (state.trainingMassage ?? 0) + (state.trainingSkills ?? 0) + (state.trainingShape ?? 0);
+        if (total > 7) {
+          state.trainingMassage = 1;
+          state.trainingSkills = 4;
+          state.trainingShape = 2;
+        }
+        return state;
+      },
       storage: {
         getItem: (key) => {
           try {

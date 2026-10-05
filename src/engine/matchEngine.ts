@@ -15,6 +15,22 @@ function poisson(lambda: number): number {
   return k - 1;
 }
 
+function freshMinute(used: Set<number>, lo = 1, hi = 90): number {
+  let m: number;
+  do { m = lo + Math.floor(Math.random() * (hi - lo + 1)); } while (used.has(m));
+  used.add(m);
+  return m;
+}
+
+function pick<T>(arr: T[]): T {
+  return arr[Math.floor(Math.random() * arr.length)];
+}
+
+function pickPos(squad: Player[], positions: string[]): Player {
+  const pool = squad.filter(p => positions.includes(p.position));
+  return pick(pool.length > 0 ? pool : squad);
+}
+
 function teamEffectiveSkill(team: Team, players: Player[], formation: Formation): number {
   const fit = players.filter(p => !p.injuredFor && !p.suspended);
   const avgPlayerSkill = fit.length > 0 ? fit.reduce((s, p) => s + p.skill, 0) / fit.length : 5;
@@ -64,31 +80,80 @@ export function simulateFullMatch(
   );
 
   const events: MatchEvent[] = [];
-  const usedMinutes = new Set<number>();
+  const used = new Set<number>();
 
-  const addGoalEvents = (count: number, teamId: number, squad: Player[]) => {
-    const scorers = squad.filter(p => p.position === 'S' || p.position === 'M');
+  // -- Goals --
+  const addGoals = (count: number, teamId: number, squad: Player[], oppSquad: Player[]) => {
     for (let i = 0; i < count; i++) {
-      let min: number;
-      do { min = 1 + Math.floor(Math.random() * 90); } while (usedMinutes.has(min));
-      usedMinutes.add(min);
-      const scorer = scorers[Math.floor(Math.random() * scorers.length)] ?? squad[0];
-      events.push({ minute: min, type: 'goal', teamId, playerName: scorer?.name ?? 'Unknown' });
+      const min = freshMinute(used);
+      const r = Math.random();
+      if (r < 0.06 && oppSquad.length > 0) {
+        const scorer = pickPos(oppSquad, ['V', 'T', 'M']);
+        events.push({ minute: min, type: 'goal', teamId, playerName: scorer.name, detail: 'owngoal' });
+      } else if (r < 0.20) {
+        const scorer = pickPos(squad, ['S', 'M']);
+        events.push({ minute: min, type: 'goal', teamId, playerName: scorer.name, detail: 'penalty' });
+      } else if (r < 0.36) {
+        const scorer = pickPos(squad, ['M', 'S']);
+        events.push({ minute: min, type: 'goal', teamId, playerName: scorer.name, detail: 'freekick' });
+      } else if (squad.length > 0) {
+        const scorer = pickPos(squad, ['S', 'M']);
+        events.push({ minute: min, type: 'goal', teamId, playerName: scorer.name });
+      }
     }
   };
 
-  addGoalEvents(homeGoals, homeTeam.id, homePlayers.length > 0 ? homePlayers : []);
-  addGoalEvents(awayGoals, awayTeam.id, awayPlayers.length > 0 ? awayPlayers : []);
+  addGoals(homeGoals, homeTeam.id, homePlayers, awayPlayers);
+  addGoals(awayGoals, awayTeam.id, awayPlayers, homePlayers);
 
-  if (Math.random() < 0.6) {
+  // -- Missed penalty (25% chance per match) --
+  if (Math.random() < 0.25) {
+    const isHomeTeam = Math.random() > 0.5;
+    const squad = isHomeTeam ? homePlayers : awayPlayers;
+    const teamId = isHomeTeam ? homeTeam.id : awayTeam.id;
+    if (squad.length > 0) {
+      events.push({ minute: freshMinute(used), type: 'missed_penalty', teamId, playerName: pickPos(squad, ['S', 'M']).name });
+    }
+  }
+
+  // -- Yellow cards (average 2-3 per match) --
+  const yellowCount = Math.max(1, poisson(2.2));
+  const yellowedPlayers = new Map<string, number>();
+
+  for (let i = 0; i < yellowCount; i++) {
     const all = [...homePlayers, ...awayPlayers];
-    const recipient = all[Math.floor(Math.random() * all.length)];
-    if (recipient) {
-      const teamId = homePlayers.includes(recipient) ? homeTeam.id : awayTeam.id;
-      let min: number;
-      do { min = 1 + Math.floor(Math.random() * 90); } while (usedMinutes.has(min));
-      usedMinutes.add(min);
-      events.push({ minute: min, type: 'yellow', teamId, playerName: recipient.name });
+    if (all.length === 0) break;
+    const p = pick(all);
+    const teamId = homePlayers.includes(p) ? homeTeam.id : awayTeam.id;
+    const prev = yellowedPlayers.get(p.name) ?? 0;
+    if (prev >= 1) {
+      events.push({ minute: freshMinute(used), type: 'red', teamId, playerName: p.name, detail: '2Y' });
+      yellowedPlayers.set(p.name, 2);
+    } else {
+      events.push({ minute: freshMinute(used), type: 'yellow', teamId, playerName: p.name });
+      yellowedPlayers.set(p.name, prev + 1);
+    }
+  }
+
+  // -- Straight red card (8% chance) --
+  if (Math.random() < 0.08) {
+    const all = [...homePlayers, ...awayPlayers];
+    if (all.length > 0) {
+      const p = pick(all);
+      if ((yellowedPlayers.get(p.name) ?? 0) < 2) {
+        const teamId = homePlayers.includes(p) ? homeTeam.id : awayTeam.id;
+        events.push({ minute: freshMinute(used), type: 'red', teamId, playerName: p.name });
+      }
+    }
+  }
+
+  // -- Injury (35% chance) --
+  if (Math.random() < 0.35) {
+    const all = [...homePlayers, ...awayPlayers];
+    if (all.length > 0) {
+      const p = pick(all);
+      const teamId = homePlayers.includes(p) ? homeTeam.id : awayTeam.id;
+      events.push({ minute: freshMinute(used), type: 'injury', teamId, playerName: p.name });
     }
   }
 

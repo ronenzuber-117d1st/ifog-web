@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type MutableRefObject } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/useGameStore';
 import { LEAGUE_TEAMS } from '../data/teams';
@@ -6,6 +6,8 @@ import { Layout } from '../components/Layout';
 import { img } from '../utils/images';
 import type { Formation, MatchEvent, MatchReport, Team, Player } from '../types/game';
 import { simulateFullMatch } from '../engine/matchEngine';
+import { BOARD_STYLES, BOARD_EMPTY } from '../data/boardStyles';
+import type { BoardStyle } from '../data/boardStyles';
 
 function MatchTeamLogo({ team, side }: { team: Team; side: 'home' | 'away' }) {
   const src = img(`wappen${String(team.id).padStart(2, '0')}.png`);
@@ -40,8 +42,9 @@ const REFEREES = [
   { name: 'B. Bumble',    style: 'INCOMPETENT', desc: 'Bewildered. Open to persuasion.',        bribeable: false, color: '#c084fc', img: 'schieds1.png' },
 ];
 
-function pickReferee(matchday: number, teamId: number) {
-  return REFEREES[(matchday * 7 + teamId * 3) % REFEREES.length];
+function pickReferee(matchday: number, teamId: number, sessionSeed: number) {
+  const hash = Math.abs(matchday * 7193 + teamId * 3761 + sessionSeed * 1009);
+  return REFEREES[hash % REFEREES.length];
 }
 
 // Pitch coord system: x=0-100% (width), y=0%(top/away-goal) to 100%(bottom/home-goal)
@@ -158,7 +161,8 @@ export function MatchDay() {
 
   const myPlayers = (rosters[managedTeamId] ?? []).filter(p => !p.injuredFor && !p.suspended);
 
-  const referee = pickReferee(currentMatchday, managedTeamId);
+  const [refSeed] = useState(() => Math.floor(Math.random() * 999983));
+  const referee = pickReferee(currentMatchday, managedTeamId, refSeed);
   const [bribed, setBribed] = useState(false);
   const [phase, setPhase] = useState<'setup' | 'playing' | 'done'>('setup');
   const [showResultOverlay, setShowResultOverlay] = useState(false);
@@ -185,6 +189,7 @@ export function MatchDay() {
   const processedRef = useRef(new Set<string>());
   const commentaryRef = useRef<string[]>([]);
   const scoreRef = useRef({ home: 0, away: 0 });
+  const subEventsRef = useRef<MatchEvent[]>([]);
 
   const handleKickOff = () => {
     if (!nextFixture || !opponent) return;
@@ -197,13 +202,24 @@ export function MatchDay() {
     const report = simulateFullMatch(nextFixture, homeTeam, awayTeam, homePlayers, awayPlayers, formation);
 
     if (bribed) {
-      const bonusGoal: MatchEvent = { minute: 3, type: 'goal', teamId: managedTeamId, playerName: 'Penalty (Ref decision)' };
-      report.events.unshift(bonusGoal);
-      if (nextFixture.homeTeamId === managedTeamId) {
-        report.fixture = { ...report.fixture, homeGoals: (report.fixture.homeGoals ?? 0) + 1 };
-      } else {
-        report.fixture = { ...report.fixture, awayGoals: (report.fixture.awayGoals ?? 0) + 1 };
+      const myIsHome = nextFixture.homeTeamId === managedTeamId;
+      let myGoals = myIsHome ? (report.fixture.homeGoals ?? 0) : (report.fixture.awayGoals ?? 0);
+      let oppGoals = myIsHome ? (report.fixture.awayGoals ?? 0) : (report.fixture.homeGoals ?? 0);
+
+      // Guarantee at least a narrow win: if losing or drawing, nudge score to a 1-goal win
+      if (myGoals <= oppGoals) {
+        const extra = oppGoals + 1 - myGoals;
+        for (let i = 0; i < extra; i++) {
+          const min = 3 + i * 7;
+          report.events.push({ minute: min, type: 'goal', teamId: managedTeamId, playerName: 'Penalty (Ref decision)' });
+          myGoals++;
+        }
+        report.events.sort((a, b) => a.minute - b.minute);
       }
+
+      report.fixture = myIsHome
+        ? { ...report.fixture, homeGoals: myGoals, awayGoals: oppGoals }
+        : { ...report.fixture, homeGoals: oppGoals, awayGoals: myGoals };
     }
 
     const snap: MatchSnap = { homeTeam, awayTeam, isHome, report };
@@ -220,6 +236,7 @@ export function MatchDay() {
     waypointIdxRef.current = 0;
     processedRef.current = new Set();
     scoreRef.current = { home: 0, away: 0 };
+    subEventsRef.current = [];
     commentaryRef.current = ['⚽ Kick off!'];
     setBallPos({ x: 50, y: 50 });
     setLiveScore({ home: 0, away: 0 });
@@ -229,7 +246,7 @@ export function MatchDay() {
   };
 
   const handleContinue = () => {
-    playMatchday();
+    playMatchday(matchSnap?.report);
     navigate('/season');
   };
 
@@ -260,14 +277,17 @@ export function MatchDay() {
             home: scoreRef.current.home + (scoringHome ? 1 : 0),
             away: scoreRef.current.away + (scoringHome ? 0 : 1),
           };
-          // Teleport ball into the net right now (away net = top, home net = bottom)
           const netX = 38 + Math.random() * 24;
           const netY = scoringHome ? 38 + Math.random() * 6 : 81 + Math.random() * 6;
           p.x = netX; p.y = netY;
           ballTargetRef.current = { x: netX, y: netY };
           waypointQueueRef.current = [];
           setBallPos({ x: netX, y: netY });
-          const msg = `⚽ GOAL! ${evt.minute}' ${evt.playerName} (${scoringHome ? homeTeam.name : awayTeam.name})`;
+          const teamName = scoringHome ? homeTeam.name : awayTeam.name;
+          const suffix = evt.detail === 'penalty' ? ' · Penalty' : evt.detail === 'freekick' ? ' · Free kick' : '';
+          const msg = evt.detail === 'owngoal'
+            ? `⚽ OWN GOAL! ${evt.minute}' ${evt.playerName} (${teamName})`
+            : `⚽ GOAL! ${evt.minute}' ${evt.playerName} (${teamName})${suffix}`;
           commentaryRef.current = [msg, ...commentaryRef.current.slice(0, 49)];
           setLiveScore({ ...scoreRef.current });
           setCommentary([...commentaryRef.current]);
@@ -275,10 +295,9 @@ export function MatchDay() {
           setGoalFlash(true);
           setTimeout(() => { goalFlashRef.current = false; setGoalFlash(false); }, 3000);
         } else if (evt.type === 'yellow') {
-          const msg = `🟨 ${evt.minute}' Yellow — ${evt.playerName}`;
+          const msg = `🟨 ${evt.minute}' Yellow card — ${evt.playerName}`;
           commentaryRef.current = [msg, ...commentaryRef.current.slice(0, 49)];
           setCommentary([...commentaryRef.current]);
-          // Teleport ball to foul location and pause briefly
           const foulX = 15 + Math.random() * 70;
           const foulY = 42 + Math.random() * 42;
           p.x = foulX; p.y = foulY;
@@ -287,6 +306,33 @@ export function MatchDay() {
           setBallPos({ x: foulX, y: foulY });
           goalFlashRef.current = true;
           setTimeout(() => { goalFlashRef.current = false; }, 2000);
+        } else if (evt.type === 'red') {
+          const msg = `🟥 ${evt.minute}' RED CARD — ${evt.playerName}${evt.detail === '2Y' ? ' (2nd yellow)' : ''}`;
+          commentaryRef.current = [msg, ...commentaryRef.current.slice(0, 49)];
+          setCommentary([...commentaryRef.current]);
+          const foulX = 15 + Math.random() * 70;
+          const foulY = 42 + Math.random() * 42;
+          p.x = foulX; p.y = foulY;
+          ballTargetRef.current = { x: foulX, y: foulY };
+          waypointQueueRef.current = [];
+          setBallPos({ x: foulX, y: foulY });
+          goalFlashRef.current = true;
+          setTimeout(() => { goalFlashRef.current = false; }, 2500);
+        } else if (evt.type === 'missed_penalty') {
+          const msg = `❌ ${evt.minute}' Penalty MISSED — ${evt.playerName}`;
+          commentaryRef.current = [msg, ...commentaryRef.current.slice(0, 49)];
+          setCommentary([...commentaryRef.current]);
+          const penX = 50, penY = evt.teamId === homeTeam.id ? 40 : 84;
+          p.x = penX; p.y = penY;
+          ballTargetRef.current = { x: penX, y: penY };
+          waypointQueueRef.current = [];
+          setBallPos({ x: penX, y: penY });
+          goalFlashRef.current = true;
+          setTimeout(() => { goalFlashRef.current = false; }, 2000);
+        } else if (evt.type === 'injury') {
+          const msg = `🚑 ${evt.minute}' Injury — ${evt.playerName} is down`;
+          commentaryRef.current = [msg, ...commentaryRef.current.slice(0, 49)];
+          setCommentary([...commentaryRef.current]);
         }
       }
 
@@ -443,6 +489,7 @@ export function MatchDay() {
             speed={speed}
             onSpeedChange={handleSetSpeed}
             onContinue={handleContinue}
+            subEventsRef={subEventsRef}
           />
         )}
       </div>
@@ -496,17 +543,17 @@ function SetupPhase({ myTeam, opponent, isHome, currentMatchday, myPlayers, form
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#070b16', fontFamily: "'Barlow', system-ui", overflow: 'hidden' }}>
 
       {/* ── Match banner ── */}
-      <section style={{ flexShrink: 0, height: 120, display: 'grid', gridTemplateColumns: '1fr 260px 1fr', alignItems: 'center', background: '#0f1628', margin: '16px 20px 0', borderRadius: 16, border: '1px solid #1c2640', position: 'relative', overflow: 'hidden' }}>
+      <section style={{ flexShrink: 0, height: 96, display: 'grid', gridTemplateColumns: '1fr 260px 1fr', alignItems: 'center', background: '#0f1628', margin: '12px 20px 0', borderRadius: 16, border: '1px solid #1c2640', position: 'relative', overflow: 'hidden' }}>
         <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse 40% 120% at 0% 50%, rgba(106,168,255,0.16), transparent 70%), radial-gradient(ellipse 40% 120% at 100% 50%, rgba(232,72,72,0.16), transparent 70%)', pointerEvents: 'none' }} />
 
         {/* Home */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 18, paddingLeft: 28, position: 'relative' }}>
           <MatchTeamLogo team={homeTeam} side="home" />
           <div>
-            <div style={{ fontFamily: "'Big Shoulders Display', sans-serif", fontWeight: 800, fontSize: 36, textTransform: 'uppercase', lineHeight: 1 }}>{homeTeam.name}</div>
+            <div style={{ fontFamily: "'Big Shoulders Display', sans-serif", fontWeight: 800, fontSize: 28, textTransform: 'uppercase', lineHeight: 1 }}>{homeTeam.name}</div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4 }}>
               <span style={{ padding: '2px 8px', borderRadius: 4, background: isHome ? '#c8f53d' : '#1c2a4e', color: isHome ? '#070b16' : '#9cc4ff', fontWeight: 700, fontSize: 11, letterSpacing: '0.1em' }}>{isHome ? 'YOU · HOME' : 'HOME'}</span>
-              <span style={{ fontSize: 13, color: '#8d99b5' }}>{isHome ? managerName : homeTeam.managerName}</span>
+              <span style={{ fontSize: 12, color: '#8d99b5' }}>{isHome ? managerName : homeTeam.managerName}</span>
             </div>
           </div>
         </div>
@@ -514,15 +561,15 @@ function SetupPhase({ myTeam, opponent, isHome, currentMatchday, myPlayers, form
         {/* VS */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, position: 'relative' }}>
           <div style={{ fontSize: 11, letterSpacing: '0.2em', textTransform: 'uppercase', color: '#8d99b5' }}>Matchday {currentMatchday} · League</div>
-          <div style={{ fontFamily: "'Big Shoulders Display', sans-serif", fontWeight: 900, fontSize: 52, lineHeight: 1, color: '#3a4768' }}>VS</div>
+          <div style={{ fontFamily: "'Big Shoulders Display', sans-serif", fontWeight: 900, fontSize: 40, lineHeight: 1, color: '#3a4768' }}>VS</div>
         </div>
 
         {/* Away */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 18, paddingRight: 28, justifyContent: 'flex-end', position: 'relative' }}>
           <div style={{ textAlign: 'right' }}>
-            <div style={{ fontFamily: "'Big Shoulders Display', sans-serif", fontWeight: 800, fontSize: 36, textTransform: 'uppercase', lineHeight: 1 }}>{awayTeam.name}</div>
+            <div style={{ fontFamily: "'Big Shoulders Display', sans-serif", fontWeight: 800, fontSize: 28, textTransform: 'uppercase', lineHeight: 1 }}>{awayTeam.name}</div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 4, justifyContent: 'flex-end' }}>
-              <span style={{ fontSize: 13, color: '#8d99b5' }}>{isHome ? opponent.managerName : managerName}</span>
+              <span style={{ fontSize: 12, color: '#8d99b5' }}>{isHome ? opponent.managerName : managerName}</span>
               <span style={{ padding: '2px 8px', borderRadius: 4, background: !isHome ? '#c8f53d' : '#1c2a4e', color: !isHome ? '#070b16' : '#9cc4ff', fontWeight: 700, fontSize: 11, letterSpacing: '0.1em' }}>{!isHome ? 'YOU · AWAY' : 'AWAY'}</span>
             </div>
           </div>
@@ -531,10 +578,10 @@ function SetupPhase({ myTeam, opponent, isHome, currentMatchday, myPlayers, form
       </section>
 
       {/* ── 3-column main ── */}
-      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '390px 1fr 320px', gap: 16, padding: '16px 20px 20px', minHeight: 0 }}>
+      <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '390px 1fr 320px', gap: 14, padding: '12px 20px 16px', minHeight: 0 }}>
 
         {/* ── Left: Tactics + Pitch ── */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: 18, borderRadius: 16, background: '#0f1628', border: '1px solid #1c2640', minHeight: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 16px', borderRadius: 16, background: '#0f1628', border: '1px solid #1c2640', minHeight: 0 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexShrink: 0 }}>
             <div style={{ fontSize: 11, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8d99b5', fontWeight: 600 }}>Tactics</div>
             <div style={{ fontSize: 13, color: '#c8f53d', fontWeight: 600 }}>{FORMATION_DESC[formation]}</div>
@@ -542,7 +589,7 @@ function SetupPhase({ myTeam, opponent, isHome, currentMatchday, myPlayers, form
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 5, flexShrink: 0 }}>
             {FORMATIONS.map(f => (
               <button key={f} onClick={() => setFormation(f)} style={{
-                height: 40, borderRadius: 8, border: `1px solid ${f === formation ? '#c8f53d' : '#2a3656'}`,
+                height: 34, borderRadius: 8, border: `1px solid ${f === formation ? '#c8f53d' : '#2a3656'}`,
                 background: f === formation ? '#c8f53d' : '#131c33',
                 color: f === formation ? '#070b16' : '#c2cbe0',
                 fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 12, cursor: 'pointer',
@@ -559,7 +606,7 @@ function SetupPhase({ myTeam, opponent, isHome, currentMatchday, myPlayers, form
             <div style={{ position: 'absolute', left: 0, right: 0, top: 18, textAlign: 'center', fontSize: 10, letterSpacing: '0.2em', color: 'rgba(255,255,255,0.5)' }}>ATTACKING ↑</div>
             {xiWithPos.map(({ player, x, y }, i) => (
               <div key={i} style={{ position: 'absolute', left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -50%)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, width: 76 }}>
-                <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#e8484d', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 13, color: '#fff', boxShadow: '0 3px 8px rgba(0,0,0,0.4)', flexShrink: 0 }}>{player.skill}</div>
+                <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#e8484d', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 13, color: '#fff', boxShadow: '0 3px 8px rgba(0,0,0,0.4)', flexShrink: 0 }}>{i + 1}</div>
                 <div style={{ padding: '1px 5px', borderRadius: 4, background: 'rgba(7,11,22,0.8)', fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap', color: '#e8edf7' }}>{player.name}</div>
               </div>
             ))}
@@ -685,7 +732,7 @@ function SetupPhase({ myTeam, opponent, isHome, currentMatchday, myPlayers, form
 
 // ── Playing Phase ─────────────────────────────────────────────────────────────
 
-function PlayingPhase({ snap, managedTeamId, portrait, formation, referee, currentMatchday, ballPos, liveScore, liveMinute, commentary, phase, goalFlash, showResultOverlay, onDismissResult, onSkip, halftime, onResumeHalftime, speed, onSpeedChange, onContinue }: {
+function PlayingPhase({ snap, managedTeamId, portrait, formation, referee, currentMatchday, ballPos, liveScore, liveMinute, commentary, phase, goalFlash, showResultOverlay, onDismissResult, onSkip, halftime, onResumeHalftime, speed, onSpeedChange, onContinue, subEventsRef }: {
   snap: MatchSnap; managedTeamId: number; portrait: string;
   formation: Formation; referee: typeof REFEREES[0]; currentMatchday: number;
   ballPos: { x: number; y: number };
@@ -696,6 +743,7 @@ function PlayingPhase({ snap, managedTeamId, portrait, formation, referee, curre
   showResultOverlay: boolean; onDismissResult: () => void;
   onSkip: () => void; halftime: boolean; onResumeHalftime: () => void;
   speed: 1 | 2 | 4; onSpeedChange: (s: 1 | 2 | 4) => void; onContinue: () => void;
+  subEventsRef: MutableRefObject<MatchEvent[]>;
 }) {
   const { stadium, borderSponsors, table, managerName, rosters, ticketSales } = useGameStore();
   const { homeTeam, awayTeam, isHome, report } = snap;
@@ -749,14 +797,15 @@ function PlayingPhase({ snap, managedTeamId, portrait, formation, referee, curre
   // Timeline event markers
   const timelineMarks = report.events.filter(e => e.minute <= liveMinute).map(e => {
     const isHomeEvt = e.teamId === homeTeam.id;
-    const isCard = e.type === 'yellow';
-    return {
-      x: Math.round((e.minute / 90) * 1000) / 10,
-      top: isHomeEvt ? 0 : 29,
-      label: (isCard ? 'YC ' : 'GOAL ') + e.minute + "'",
-      bg: isCard ? '#f5b94a' : isHomeEvt ? '#6aa8ff' : '#ff5a52',
-      fg: isCard ? '#070b16' : isHomeEvt ? '#070b16' : '#ffffff',
-    };
+    const isYellow = e.type === 'yellow';
+    const isRed = e.type === 'red';
+    const isMiss = e.type === 'missed_penalty';
+    const isInj = e.type === 'injury';
+    const isSub = e.type === 'sub';
+    const label = isYellow ? `YC ${e.minute}'` : isRed ? `RC ${e.minute}'` : isMiss ? `❌ ${e.minute}'` : isInj ? `🚑 ${e.minute}'` : isSub ? `🔄 ${e.minute}'` : `⚽ ${e.minute}'`;
+    const bg = isYellow ? '#f5b94a' : isRed ? '#ef4444' : isMiss ? '#374151' : isInj ? '#0d9488' : isSub ? '#7c3aed' : isHomeEvt ? '#6aa8ff' : '#ff5a52';
+    const fg = isYellow ? '#070b16' : '#ffffff';
+    return { x: Math.round((e.minute / 90) * 1000) / 10, top: isHomeEvt ? 0 : 29, label, bg, fg };
   });
 
   // Match stats derived from events + seeded pseudorandom
@@ -782,6 +831,50 @@ function PlayingPhase({ snap, managedTeamId, portrait, formation, referee, curre
     const resultLabel = myGoals > oppGoals ? 'VICTORY!' : myGoals === oppGoals ? 'DRAW' : 'DEFEAT';
     const resultImg = myGoals > oppGoals ? 'sieg.png' : myGoals === oppGoals ? 'gleich.png' : 'loser.png';
     const resultAccent = myGoals > oppGoals ? '#c8f53d' : myGoals === oppGoals ? '#6aa8ff' : '#ff5a52';
+
+    const allReportEvents = [...report.events, ...subEventsRef.current].sort((a, b) => a.minute - b.minute);
+
+    const renderEventRow = (evt: MatchEvent, i: number) => {
+      const isHomeEvt = evt.teamId === homeTeam.id;
+      const teamColor = isHomeEvt ? '#6aa8ff' : '#ff6b63';
+      let icon: string, text: string, rowBg = 'transparent', textColor = '#c2cbe0', bold = false;
+
+      if (evt.type === 'goal') {
+        const teamName = isHomeEvt ? homeTeam.name : awayTeam.name;
+        icon = '⚽';
+        bold = true;
+        rowBg = `${teamColor}18`;
+        textColor = '#fff';
+        if (evt.detail === 'penalty')   text = `GOAL (Penalty) — ${evt.playerName}`;
+        else if (evt.detail === 'freekick') text = `GOAL (Free kick) — ${evt.playerName}`;
+        else if (evt.detail === 'owngoal')  text = `OWN GOAL — ${evt.playerName}`;
+        else text = `GOAL — ${evt.playerName}`;
+        text += `  ·  ${teamName}`;
+      } else if (evt.type === 'yellow') {
+        icon = '🟨'; text = `Yellow card — ${evt.playerName}`;
+      } else if (evt.type === 'red') {
+        icon = '🟥'; text = `Red card — ${evt.playerName}${evt.detail === '2Y' ? ' (2nd yellow)' : ''}`;
+        rowBg = 'rgba(239,68,68,0.08)'; textColor = '#fca5a5';
+      } else if (evt.type === 'missed_penalty') {
+        icon = '❌'; text = `Penalty missed — ${evt.playerName}`;
+      } else if (evt.type === 'injury') {
+        icon = '🚑'; text = `Injury — ${evt.playerName}`;
+      } else if (evt.type === 'sub') {
+        icon = '🔄'; text = `Substitution — ${evt.playerName} ↓  ${evt.detail} ↑`;
+        textColor = '#a78bfa';
+      } else {
+        icon = '⏱'; text = evt.playerName;
+      }
+
+      return (
+        <div key={i} style={{ display: 'grid', gridTemplateColumns: '36px 22px 1fr', gap: 6, padding: '5px 8px', borderRadius: 6, background: rowBg }}>
+          <div style={{ fontFamily: "'JetBrains Mono', Consolas, monospace", fontSize: 12, fontWeight: 700, color: bold ? teamColor : '#4b5675', alignSelf: 'center' }}>{evt.minute}'</div>
+          <div style={{ fontSize: 14, alignSelf: 'center' }}>{icon}</div>
+          <div style={{ fontSize: 13, color: textColor, fontWeight: bold ? 700 : 400, alignSelf: 'center' }}>{text}</div>
+        </div>
+      );
+    };
+
     return (
       <div style={{ height: '100%', display: 'flex', background: '#070b16', fontFamily: 'Barlow, system-ui' }}>
         <div style={{ width: '36%', flexShrink: 0, background: '#0f1628', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', borderRight: '1px solid #1c2640', padding: '20px', gap: 12 }}>
@@ -790,40 +883,43 @@ function PlayingPhase({ snap, managedTeamId, portrait, formation, referee, curre
           <div style={{ fontFamily: "'JetBrains Mono', Consolas, monospace", fontSize: 20, color: '#fff', fontWeight: 700 }}>
             {homeTeam.name} {liveScore.home} – {liveScore.away} {awayTeam.name}
           </div>
+          <div style={{ fontSize: 12, color: '#8d99b5', textAlign: 'center' }}>
+            ⭐ Man of the Match<br />
+            <span style={{ color: '#f5c76b', fontWeight: 700 }}>{report.manOfMatch}</span>
+          </div>
           <button onClick={onContinue} style={{ marginTop: 8, background: '#c8f53d', border: 'none', color: '#070b16', padding: '12px 36px', fontSize: 15, fontWeight: 900, cursor: 'pointer', borderRadius: 10, fontFamily: "'Big Shoulders Display', Impact", letterSpacing: 2 }}>
             CONTINUE →
           </button>
         </div>
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: '#0a0f1d' }}>
-          <div style={{ flexShrink: 0, padding: '10px 18px', borderBottom: '1px solid #1c2640' }}>
+          <div style={{ flexShrink: 0, padding: '10px 18px', borderBottom: '1px solid #1c2640', display: 'flex', alignItems: 'center', gap: 12 }}>
             <span style={{ fontSize: 11, color: '#8d99b5', fontWeight: 700, letterSpacing: 2 }}>MATCH REPORT</span>
+            <span style={{ fontSize: 11, color: '#6aa8ff' }}>{homeTeam.name}</span>
+            <span style={{ fontSize: 11, color: '#4b5675' }}>vs</span>
+            <span style={{ fontSize: 11, color: '#ff6b63' }}>{awayTeam.name}</span>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {commentary.map((line, i) => {
-              const isGoal = line.startsWith('⚽ GOAL!');
-              const isCard = line.startsWith('🟨');
-              const min = line.match(/(\d+)'/)?.[1] ?? '';
-              const text = line.replace(/^[⚽🟨⏱🏁]\s*/, '').replace(/^\d+'\s*/, '');
-              return (
-                <div key={i} style={{ display: 'grid', gridTemplateColumns: '40px 1fr', gap: 8, padding: '5px 8px', borderRadius: 6, background: isGoal ? 'rgba(106,168,255,0.1)' : isCard ? 'rgba(245,185,74,0.07)' : 'transparent' }}>
-                  <div style={{ fontFamily: "'JetBrains Mono', Consolas, monospace", fontSize: 12, fontWeight: 700, color: isGoal ? '#9cc4ff' : isCard ? '#f5c76b' : '#4b5675' }}>{min ? `${min}'` : ''}</div>
-                  <div style={{ fontSize: 13, color: isGoal ? '#fff' : '#c2cbe0', fontWeight: isGoal ? 700 : 400 }}>{text}</div>
-                </div>
-              );
-            })}
+            {allReportEvents.length === 0 ? (
+              <div style={{ padding: '20px 8px', color: '#4b5675', fontSize: 13, fontStyle: 'italic' }}>No notable events recorded.</div>
+            ) : (
+              allReportEvents.map((evt, i) => renderEventRow(evt, i))
+            )}
           </div>
         </div>
       </div>
     );
   }
 
-  // Parse commentary into feed rows
   const feedRows = commentary.map((line, i) => {
-    const isGoal = line.startsWith('⚽ GOAL!');
-    const isCard = line.startsWith('🟨');
+    const isGoal = line.startsWith('⚽ GOAL!') || line.startsWith('⚽ OWN GOAL!');
+    const isYellow = line.startsWith('🟨');
+    const isRed = line.startsWith('🟥');
+    const isMiss = line.startsWith('❌');
+    const isInj = line.startsWith('🚑');
+    const isSub = line.startsWith('🔄');
     const min = line.match(/(\d+)'/)?.[1] ?? '';
-    const text = line.replace(/^[⚽🟨⏱🏁]\s*/, '').replace(/^\d+'\s*/, '');
-    return { key: i, isGoal, isCard, min, text };
+    const text = line.replace(/^[⚽🟨🟥❌🚑🔄⏱🏁]\s*/, '').replace(/^\d+'\s*/, '');
+    return { key: i, isGoal, isYellow, isRed, isMiss, isInj, isSub, min, text };
   });
 
   // Last goal for GOAL! banner
@@ -859,7 +955,6 @@ function PlayingPhase({ snap, managedTeamId, portrait, formation, referee, curre
           </div>
 
           {/* Tribune / stands (21.1%) — between top row and pitch */}
-          {/* pillar-align: left: seatsLevel >= 2 ? '-2%' : 0, width: seatsLevel >= 2 ? '102%' : '100%' */}
           <img src={img(`trib${seatsLevel}.png`)} style={{
             position: 'absolute', top: '39.9%',
             left: 0, width: '100%',
@@ -925,20 +1020,19 @@ function PlayingPhase({ snap, managedTeamId, portrait, formation, referee, curre
             <div style={{ fontSize: '12px', fontWeight: 700, color: '#e2e8f0', fontFamily: "'JetBrains Mono', monospace" }}>{attendance.toLocaleString()}</div>
           </div>
 
-          {/* Sponsor hoarding — at the top of the pitch */}
-          <div style={{
-            position: 'absolute', top: '59.5%', left: 0, right: 0, height: '3%',
-            background: '#cc0000', display: 'flex', alignItems: 'center', overflow: 'hidden', zIndex: 8,
-          }}>
-            {borderSponsors.length > 0 ? borderSponsors.map((d, i) => (
-              <div key={i} style={{ flex: 1, textAlign: 'center', color: '#fff', fontWeight: '900', fontSize: '9px', fontFamily: 'Impact, Arial Black, Arial', letterSpacing: '2px' }}>
-                {d.name}
-              </div>
-            )) : (
-              <div style={{ flex: 1, textAlign: 'center', color: 'rgba(255,255,255,0.5)', fontSize: '8px', letterSpacing: '3px', fontFamily: 'Impact, Arial Black, Arial' }}>
-                YOUR SPONSOR HERE
-              </div>
-            )}
+          {/* Sponsor hoarding — covers crowd/pitch junction + white strip */}
+          <div style={{ position: 'absolute', top: '59%', left: 0, right: 0, height: '5%', display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0,1fr))', gap: 2, zIndex: 8, overflow: 'hidden' }}>
+            {[0, 1, 2, 3].map(k => {
+              const deal = borderSponsors[k];
+              const s: BoardStyle = deal ? (BOARD_STYLES[deal.name] ?? BOARD_EMPTY) : BOARD_EMPTY;
+              return (
+                <div key={k} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, height: '100%', background: s.bg, color: s.fg, fontFamily: s.font, fontStyle: s.fi, fontWeight: s.fw, letterSpacing: s.ls, fontSize: 8, textTransform: s.tt as 'uppercase' | 'none', whiteSpace: 'nowrap', overflow: 'hidden', lineHeight: 1 }}>
+                  {s.pre && <span style={{ color: s.ac }}>{s.pre}</span>}
+                  <span>{s.text}</span>
+                  {s.post && <span style={{ color: s.ac, fontSize: '0.6em' }}>{s.post}</span>}
+                </div>
+              );
+            })}
           </div>
 
           {/* GOAL! banner */}
@@ -960,12 +1054,13 @@ function PlayingPhase({ snap, managedTeamId, portrait, formation, referee, curre
 
           {/* Ball — transparent overlay on the pitch area */}
           <div style={{ position: 'absolute', left: '7%', right: '7%', top: '63%', bottom: '3%', overflow: 'hidden' }}>
-            <div style={{
+            <img src={img('ball.png')} alt="" style={{
               position: 'absolute', left: `${ballPos.x}%`, top: `${ballPos.y}%`,
-              transform: 'translate(-50%, -50%)', fontSize: '28px', lineHeight: '1',
+              width: 28, height: 28,
+              transform: 'translate(-50%, -50%)',
               transition: phase === 'playing' ? 'left 0.12s linear, top 0.12s linear' : 'none',
               zIndex: 10, pointerEvents: 'none',
-            }}>⚽</div>
+            }} />
           </div>
       </div>
 
@@ -1040,10 +1135,10 @@ function PlayingPhase({ snap, managedTeamId, portrait, formation, referee, curre
                 padding: '3px 12px', gap: 6, alignItems: 'start',
                 opacity: 1 - i * 0.14,
                 marginLeft: 2,
-                borderLeft: `2px solid ${row.isGoal ? '#c8f53d' : row.isCard ? '#f59e0b' : 'transparent'}`,
+                borderLeft: `2px solid ${row.isGoal ? '#c8f53d' : row.isYellow ? '#f59e0b' : row.isRed ? '#ef4444' : row.isSub ? '#7c3aed' : 'transparent'}`,
               }}>
                 <div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: '9px', color: '#64748b', textAlign: 'right', paddingTop: 1 }}>{row.min ? `${row.min}'` : ''}</div>
-                <div style={{ fontSize: '11px', color: row.isGoal ? '#c8f53d' : row.isCard ? '#fbbf24' : '#94a3b8', fontFamily: "'Barlow', sans-serif", lineHeight: 1.4, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{row.text}</div>
+                <div style={{ fontSize: '11px', color: row.isGoal ? '#c8f53d' : row.isYellow ? '#fbbf24' : row.isRed ? '#fca5a5' : row.isInj ? '#5eead4' : row.isSub ? '#c4b5fd' : '#94a3b8', fontFamily: "'Barlow', sans-serif", lineHeight: 1.4, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{row.text}</div>
               </div>
             ))}
           </div>
@@ -1247,12 +1342,18 @@ function PlayingPhase({ snap, managedTeamId, portrait, formation, referee, curre
               <button
                 disabled={!selectedOut || !selectedIn || subsLeft === 0}
                 onClick={() => {
-                  if (!selectedOut || !selectedIn || subsLeft === 0) return;
+                  if (!selectedOut || !selectedIn || subsLeft === 0 || !matchSnap) return;
                   const outPlayer = matchSquad.find(p => p.id === selectedOut)!;
                   const inPlayer = matchBench.find(p => p.id === selectedIn)!;
                   setMatchSquad(sq => sq.map(p => p.id === selectedOut ? inPlayer : p));
                   setMatchBench(b => b.map(p => p.id === selectedIn ? outPlayer : p));
                   setSubsLeft(s => s - 1);
+                  const subMin = Math.max(1, Math.floor(physRef.current.minute));
+                  const subEvt: MatchEvent = { minute: subMin, type: 'sub', teamId: managedTeamId, playerName: outPlayer.name, detail: inPlayer.name };
+                  subEventsRef.current = [...subEventsRef.current, subEvt];
+                  const subMsg = `🔄 ${subMin}' Sub — ${outPlayer.name} ↓  ${inPlayer.name} ↑`;
+                  commentaryRef.current = [subMsg, ...commentaryRef.current.slice(0, 49)];
+                  setCommentary([...commentaryRef.current]);
                   setSelectedOut(null);
                   setSelectedIn(null);
                 }}

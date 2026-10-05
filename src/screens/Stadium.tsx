@@ -17,7 +17,7 @@ const UPGRADE_COSTS: Record<string, number[]> = {
 const UPGRADE_LABELS: Record<string, string[]> = {
   pitch:      ['Basic Grass', 'Good Turf', 'Premium Surface'],
   seats:      ['15,000 Seats', '25,000 Seats', '40,000 Seats'],
-  facilities: ['Basic', 'Good', 'Premium'],
+  facilities: ['Basic Board', 'HD Board', 'Premium Board'],
   lights:     ['Dim Lights', 'Bright Lights', 'Floodlit'],
 };
 
@@ -166,7 +166,7 @@ export function Stadium() {
                 <UpgradeChip label="Lights"     current={lightsLevel} cost={UPGRADE_COSTS.lights[lightsLevel]}
                   desc={UPGRADE_LABELS.lights[lightsLevel - 1]}     canAfford={balance >= UPGRADE_COSTS.lights[lightsLevel]}
                   onUpgrade={() => upgradeStadium('lights')}         style={{ top: '5%', left: '2%' }} />
-                <UpgradeChip label="Facilities" current={facilLevel}  cost={UPGRADE_COSTS.facilities[facilLevel]}
+                <UpgradeChip label="Scoring Board" current={facilLevel}  cost={UPGRADE_COSTS.facilities[facilLevel]}
                   desc={UPGRADE_LABELS.facilities[facilLevel - 1]}   canAfford={balance >= UPGRADE_COSTS.facilities[facilLevel]}
                   onUpgrade={() => upgradeStadium('facilities')}     style={{ top: '5%', left: '50%', transform: 'translateX(-50%)' }} />
                 <UpgradeChip label="Seats"      current={seatsLevel}  cost={UPGRADE_COSTS.seats[seatsLevel]}
