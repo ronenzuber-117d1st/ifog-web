@@ -3,7 +3,7 @@ import { useGameStore } from '../store/useGameStore';
 import { Layout } from '../components/Layout';
 import { img } from '../utils/images';
 import { LEAGUE_TEAMS } from '../data/teams';
-import { FOOD_REVENUE_PER_MATCH, MERCH_REVENUE_PER_MATCH, TICKET_PRICE_PRESETS, calcDemand, calcTicketSalesByDemand } from '../data/finances';
+import { TICKET_PRICE_PRESETS, calcDemand, calcTicketSalesByDemand, calcFoodSales, calcMerchSales, calcTotalAttendance } from '../data/finances';
 
 type StadiumTab = 'stadium' | 'magazine' | 'tickets' | 'cheerleader' | 'fishchips' | 'fanshop' | 'viplounge' | 'radiotv';
 
@@ -81,15 +81,14 @@ export function Stadium() {
     stadium, balance, upgradeStadium,
     staff, currentMatchday, fixtures, managedTeamId,
     mediaDeal, signMediaDeal, cancelMediaDeal, table, priceLevel,
+    foodStock, shopStock,
   } = useGameStore();
 
   const [tab, setTab] = useState<StadiumTab>('stadium');
-  const [fishItem,  setFishItem]  = useState(0);
-  const [fishQty,   setFishQty]   = useState<number | ''>('');
-  const [fishStock, setFishStock] = useState(() => FISH_ITEMS.map(() => 800));
-  const [shopItem,  setShopItem]  = useState(0);
-  const [shopQty,   setShopQty]   = useState<number | ''>('');
-  const [shopStock, setShopStock] = useState(() => SHOP_ITEMS.map(() => 40));
+  const [fishItem, setFishItem] = useState(0);
+  const [fishQty,  setFishQty]  = useState<number | ''>('');
+  const [shopItem, setShopItem] = useState(0);
+  const [shopQty,  setShopQty]  = useState<number | ''>('');
 
   const pitchLevel  = stadium.pitch      as 1 | 2 | 3;
   const seatsLevel  = stadium.seats      as 1 | 2 | 3;
@@ -113,6 +112,7 @@ export function Stadium() {
   const ppg         = myTableRow && myTableRow.played > 0 ? myTableRow.points / myTableRow.played : 1.5;
   const demand      = calcDemand(myPosition > 0 ? myPosition : 10, ppg);
   const ticketSales = calcTicketSalesByDemand(demand, priceLevel, seatsLevel);
+  const attendance  = calcTotalAttendance(demand, priceLevel, seatsLevel);
 
   const tabBtn = (t: StadiumTab) => {
     const active = tab === t;
@@ -323,9 +323,9 @@ export function Stadium() {
                         onClick={() => {
                           const cost = FISH_ITEMS[fishItem].price * (fishQty || 0);
                           if (!fishQty || balance < cost) return;
-                          setFishStock(prev => prev.map((s, i) => i === fishItem ? s + (fishQty || 0) : s));
                           useGameStore.setState(s => ({
                             balance: s.balance - cost,
+                            foodStock: s.foodStock.map((n, i) => i === fishItem ? n + (fishQty as number) : n),
                             financeHistory: [...s.financeHistory, {
                               matchday: currentMatchday,
                               description: `Fish&Chips: ${FISH_ITEMS[fishItem].name} ×${fishQty}`,
@@ -333,6 +333,7 @@ export function Stadium() {
                               running: s.balance - cost,
                             }],
                           }));
+                          setFishQty('');
                         }}
                         style={{ padding: '4px 10px', border: '1px solid #888', fontSize: '14px', cursor: balance >= FISH_ITEMS[fishItem].price * fishQty ? 'pointer' : 'default', background: balance >= FISH_ITEMS[fishItem].price * fishQty ? '#ddd' : '#c8c8c8' }}>
                         BUY &gt;&gt;
@@ -354,9 +355,9 @@ export function Stadium() {
                           {FISH_ITEMS.map((item, i) => (
                             <tr key={i}>
                               <td style={{ padding: '2px 6px' }}>{item.name}</td>
-                              <td style={{ textAlign: 'right', padding: '2px 6px' }}>{fishStock[i]}</td>
+                              <td style={{ textAlign: 'right', padding: '2px 6px' }}>{foodStock[i] ?? 0}</td>
                               <td style={{ textAlign: 'right', padding: '2px 6px' }}>{item.price.toFixed(2)}</td>
-                              <td style={{ textAlign: 'right', padding: '2px 6px', whiteSpace: 'nowrap' }}>400 Pieces</td>
+                              <td style={{ textAlign: 'right', padding: '2px 6px', whiteSpace: 'nowrap' }}>—</td>
                             </tr>
                           ))}
                         </tbody>
@@ -366,11 +367,12 @@ export function Stadium() {
                     {/* Profit footer */}
                     {(() => {
                       const TIER_COSTS = [0, 250, 750, 1500];
-                      const profit = FOOD_REVENUE_PER_MATCH - TIER_COSTS[staff.fishChips];
+                      const fs = calcFoodSales(attendance, staff.fishChips);
+                      const staffCost = TIER_COSTS[staff.fishChips];
                       return (
                         <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', gap: '12px', alignItems: 'baseline', borderTop: '1px solid #aaa', paddingTop: '6px', marginTop: '6px' }}>
-                          <span style={{ fontSize: '14px' }}>Revenue £{FOOD_REVENUE_PER_MATCH.toLocaleString()} − staff £{TIER_COSTS[staff.fishChips].toLocaleString()} =</span>
-                          <span style={{ fontWeight: 'bold', fontSize: '20px' }}>£{profit.toLocaleString()}/match</span>
+                          <span style={{ fontSize: '14px' }}>Est. sales £{fs.revenue.toLocaleString()} − staff £{staffCost.toLocaleString()} =</span>
+                          <span style={{ fontWeight: 'bold', fontSize: '20px' }}>£{(fs.revenue - staffCost).toLocaleString()}/match</span>
                         </div>
                       );
                     })()}
@@ -419,9 +421,9 @@ export function Stadium() {
                         onClick={() => {
                           const cost = SHOP_ITEMS[shopItem].price * (shopQty || 0);
                           if (!shopQty || balance < cost) return;
-                          setShopStock(prev => prev.map((s, i) => i === shopItem ? s + (shopQty || 0) : s));
                           useGameStore.setState(s => ({
                             balance: s.balance - cost,
+                            shopStock: s.shopStock.map((n, i) => i === shopItem ? n + (shopQty as number) : n),
                             financeHistory: [...s.financeHistory, {
                               matchday: currentMatchday,
                               description: `Fan Shop: ${SHOP_ITEMS[shopItem].name} ×${shopQty}`,
@@ -429,6 +431,7 @@ export function Stadium() {
                               running: s.balance - cost,
                             }],
                           }));
+                          setShopQty('');
                         }}
                         style={{ padding: '4px 10px', border: '1px solid #888', fontSize: '14px', cursor: shopQty && balance >= SHOP_ITEMS[shopItem].price * (shopQty || 0) ? 'pointer' : 'default', background: shopQty && balance >= SHOP_ITEMS[shopItem].price * (shopQty || 0) ? '#ddd' : '#c8c8c8' }}>
                         BUY &gt;&gt;
@@ -450,9 +453,9 @@ export function Stadium() {
                           {SHOP_ITEMS.map((item, i) => (
                             <tr key={i}>
                               <td style={{ padding: '2px 6px' }}>{item.name}</td>
-                              <td style={{ textAlign: 'right', padding: '2px 6px' }}>{shopStock[i]}</td>
+                              <td style={{ textAlign: 'right', padding: '2px 6px' }}>{shopStock[i] ?? 0}</td>
                               <td style={{ textAlign: 'right', padding: '2px 6px' }}>{item.price.toFixed(2)}</td>
-                              <td style={{ textAlign: 'right', padding: '2px 6px', whiteSpace: 'nowrap' }}>20 Pieces</td>
+                              <td style={{ textAlign: 'right', padding: '2px 6px', whiteSpace: 'nowrap' }}>—</td>
                             </tr>
                           ))}
                         </tbody>
@@ -462,11 +465,12 @@ export function Stadium() {
                     {/* Revenue footer */}
                     {(() => {
                       const TIER_COSTS = [0, 250, 750, 1500];
-                      const profit = MERCH_REVENUE_PER_MATCH - TIER_COSTS[staff.fanShop];
+                      const ms = calcMerchSales(attendance, staff.fanShop);
+                      const staffCost = TIER_COSTS[staff.fanShop];
                       return (
                         <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', gap: '12px', alignItems: 'baseline', borderTop: '1px solid #aaa', paddingTop: '6px', marginTop: '6px' }}>
-                          <span style={{ fontSize: '14px' }}>Revenue £{MERCH_REVENUE_PER_MATCH.toLocaleString()} − staff £{TIER_COSTS[staff.fanShop].toLocaleString()} =</span>
-                          <span style={{ fontWeight: 'bold', fontSize: '20px' }}>£{profit.toLocaleString()}/match</span>
+                          <span style={{ fontSize: '14px' }}>Est. sales £{ms.revenue.toLocaleString()} − staff £{staffCost.toLocaleString()} =</span>
+                          <span style={{ fontWeight: 'bold', fontSize: '20px' }}>£{(ms.revenue - staffCost).toLocaleString()}/match</span>
                         </div>
                       );
                     })()}

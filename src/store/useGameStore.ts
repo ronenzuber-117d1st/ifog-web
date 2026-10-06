@@ -19,7 +19,7 @@ function computeXI(players: Player[], formation: Formation): string[] {
 }
 import { LEAGUE_TEAMS, getAllRosters } from '../data/teams';
 import { GAME_EVENTS, CHAIRMAN_MESSAGES } from '../data/events';
-import { STARTING_BALANCE, WAGES_PER_MATCHDAY, calcMatchRevenue, calcDemand } from '../data/finances';
+import { STARTING_BALANCE, FOOD_PRICES, MERCH_PRICES, calcPlayerWage, calcTicketRevenue, calcDemand, calcFoodSales, calcMerchSales, calcTotalAttendance } from '../data/finances';
 import { generateFixtures } from '../engine/scheduler';
 import { simulateFullMatch, simulateMatch } from '../engine/matchEngine';
 
@@ -87,6 +87,7 @@ export interface GameStore {
   // Sponsorship
   shirtSponsor: SponsorDeal | null;
   borderSponsors: SponsorDeal[];
+  borderOfferIdx: number;
 
   // Stadium
   stadium: StadiumState;
@@ -98,6 +99,10 @@ export interface GameStore {
 
   // Media
   mediaDeal: MediaDeal | null;
+
+  // Stock
+  foodStock: number[];
+  shopStock: number[];
 
   startNewGame: (managerName: string, teamId: number, portrait?: string, difficulty?: Difficulty) => void;
   playMatchday: (liveReport?: MatchReport) => void;
@@ -112,6 +117,7 @@ export interface GameStore {
   setMerchandiseEnabled: (v: boolean) => void;
   acceptShirtSponsor: (deal: SponsorDeal) => void;
   acceptBorderDeal: (deal: SponsorDeal) => void;
+  advanceBorderOfferIdx: () => void;
   hirePlayer: (player: Player) => void;
   sellPlayer: (playerId: string) => void;
   upgradeStadium: (type: 'pitch' | 'seats' | 'facilities' | 'lights') => void;
@@ -203,11 +209,14 @@ export const useGameStore = create<GameStore>()(
       transfersUsed: 0,
       shirtSponsor: null,
       borderSponsors: [],
+      borderOfferIdx: 0,
       stadium: { pitch: 1, seats: 1, facilities: 1, lights: 1 },
       staff: { fishChips: 0, fanShop: 0, ticketSales: 0, cheerleader: 0, coach: 0 },
       pendingBet: null,
       eventLog: [],
       mediaDeal: null,
+      foodStock: Array(10).fill(0),
+      shopStock: Array(10).fill(0),
 
       startNewGame: (managerName, teamId, portrait, difficulty = 'intermediate') => {
         const rosters = getAllRosters();
@@ -247,17 +256,20 @@ export const useGameStore = create<GameStore>()(
           transfersUsed: 0,
           shirtSponsor: null,
           borderSponsors: [],
+          borderOfferIdx: 0,
           stadium: { pitch: 1, seats: 1, facilities: 1, lights: 1 },
           staff: { fishChips: 0, fanShop: 0, ticketSales: 0, cheerleader: 0, coach: 0 },
           pendingBet: null,
           eventLog: [],
           mediaDeal: null,
+          foodStock: Array(10).fill(800),
+          shopStock: Array(10).fill(40),
         });
       },
 
       playMatchday: (liveReport?: MatchReport) => {
         const s = get();
-        const { currentMatchday, fixtures, rosters, managedTeamId, formation, startingXI, table, balance, financeHistory, managerName, priceLevel, foodEnabled, merchandiseEnabled, trainingSkills, trainingShape, borderSponsors, stadium, difficulty, staff, pendingBet, eventLog, mediaDeal } = s;
+        const { currentMatchday, fixtures, rosters, managedTeamId, formation, startingXI, table, balance, financeHistory, managerName, priceLevel, foodEnabled, merchandiseEnabled, trainingSkills, trainingShape, borderSponsors, stadium, difficulty, staff, pendingBet, eventLog, mediaDeal, foodStock, shopStock } = s;
         const xiSet = new Set(startingXI ?? []);
 
         const dayFixtures = fixtures.filter(f => f.matchday === currentMatchday && !f.homeGoals && f.homeGoals !== 0);
@@ -329,11 +341,23 @@ export const useGameStore = create<GameStore>()(
         const myPosition = table.findIndex(r => r.teamId === managedTeamId) + 1;
         const ppg = myRow && myRow.played > 0 ? myRow.points / myRow.played : 1.5;
         const demand = calcDemand(myPosition > 0 ? myPosition : 10, ppg);
-        const matchRevenue = calcMatchRevenue(
-          isHomeMatch, priceLevel, demand, stadium.seats,
-          staff.fishChips > 0, staff.fanShop > 0,
-        );
-        const wages = WAGES_PER_MATCHDAY - (staff.coach === 4 ? 10_000 : 0); // Mag Catcher (Torry)
+        const ticketRevenue = isHomeMatch ? calcTicketRevenue(priceLevel, demand, stadium.seats) : 0;
+        const attendance    = isHomeMatch ? calcTotalAttendance(demand, priceLevel, stadium.seats) : 0;
+
+        // Cap demand-based unit sales by actual stock on hand
+        const rawFoodSales = isHomeMatch && staff.fishChips > 0 ? calcFoodSales(attendance, staff.fishChips) : null;
+        const rawShopSales = isHomeMatch && staff.fanShop   > 0 ? calcMerchSales(attendance, staff.fanShop)  : null;
+        const actualFoodSold = rawFoodSales ? rawFoodSales.unitsSold.map((qty, i) => Math.min(qty, foodStock[i])) : null;
+        const actualShopSold = rawShopSales ? rawShopSales.unitsSold.map((qty, i) => Math.min(qty, shopStock[i])) : null;
+        const foodRevenue = actualFoodSold ? actualFoodSold.reduce((sum, qty, i) => sum + qty * FOOD_PRICES[i], 0) : 0;
+        const shopRevenue = actualShopSold ? actualShopSold.reduce((sum, qty, i) => sum + qty * MERCH_PRICES[i], 0) : 0;
+        const newFoodStock = actualFoodSold ? foodStock.map((qty, i) => qty - actualFoodSold[i]) : [...foodStock];
+        const newShopStock = actualShopSold ? shopStock.map((qty, i) => qty - actualShopSold[i]) : [...shopStock];
+
+        const squad = rosters[managedTeamId] ?? [];
+        const rawWages = squad.reduce((sum, p) => sum + calcPlayerWage(p.skill, p.age), 0);
+        const wages = Math.max(0, rawWages - (staff.coach === 4 ? 10_000 : 0)); // Mag Catcher (Torry) saves £10K
+        const matchRevenue = ticketRevenue + foodRevenue + shopRevenue;
         const net = matchRevenue - wages;
 
         const event = pickEvent();
@@ -412,31 +436,51 @@ export const useGameStore = create<GameStore>()(
         }
 
         const pos = adjustedTable.findIndex(r => r.teamId === managedTeamId) + 1;
-        const entries: FinanceEntry[] = [
-          {
-            matchday: currentMatchday,
-            description: isHomeMatch ? 'Home match revenue' : 'Away match (wages only)',
-            amount: net + eventMoney,
-            running: newBalance - borderPayment,
-          },
-        ];
+        // Build entries with running balance tracked per line
+        let runBal = balance;
+        const entries: FinanceEntry[] = [];
+
+        // Wages (every matchday)
+        runBal -= wages;
+        entries.push({ matchday: currentMatchday, description: 'Team wages', amount: -wages, running: runBal });
+
+        // Home match revenues
+        if (ticketRevenue > 0) {
+          runBal += ticketRevenue;
+          entries.push({ matchday: currentMatchday, description: 'Ticket sales', amount: ticketRevenue, running: runBal });
+        }
+        if (actualFoodSold && foodRevenue > 0) {
+          runBal += foodRevenue;
+          entries.push({ matchday: currentMatchday, description: 'Food stand sales', amount: foodRevenue, running: runBal });
+        }
+        if (actualShopSold && shopRevenue > 0) {
+          runBal += shopRevenue;
+          entries.push({ matchday: currentMatchday, description: 'Fan shop sales', amount: shopRevenue, running: runBal });
+        }
+
+        // Random event
+        if (eventMoney !== 0) {
+          runBal += eventMoney;
+          entries.push({ matchday: currentMatchday, description: 'Club event', amount: eventMoney, running: runBal });
+        }
+
+        // Border sponsorship payments
         if (borderPayment > 0) {
+          runBal += borderPayment;
           entries.push({
             matchday: currentMatchday,
             description: activeBorderSponsors.length === 1
               ? `Border: ${activeBorderSponsors[0].name}`
               : `Border deals (${activeBorderSponsors.length})`,
             amount: borderPayment,
-            running: newBalance,
+            running: runBal,
           });
         }
+
+        // Media deal
         if (mediaRevenue > 0) {
-          entries.push({
-            matchday: currentMatchday,
-            description: `Media: ${mediaDeal!.name}`,
-            amount: mediaRevenue,
-            running: newBalance,
-          });
+          runBal += mediaRevenue;
+          entries.push({ matchday: currentMatchday, description: `Media: ${mediaDeal!.name}`, amount: mediaRevenue, running: runBal });
         }
 
         const newRosters = { ...rosters };
@@ -489,9 +533,12 @@ export const useGameStore = create<GameStore>()(
           phase: 'result',
           transfersUsed: 0,
           borderSponsors: newBorderSponsors,
+          borderOfferIdx: 0,
           pendingBet: null,
           eventLog: newEventLog,
           mediaDeal: newMediaDeal,
+          foodStock: newFoodStock,
+          shopStock: newShopStock,
         });
       },
 
@@ -544,11 +591,12 @@ export const useGameStore = create<GameStore>()(
       },
 
       acceptBorderDeal: (deal) => {
-        const { borderSponsors } = get();
+        const { borderSponsors, borderOfferIdx } = get();
         if (borderSponsors.length >= 4) return;
         const cappedDeal = { ...deal, matchdays: Math.min(8, deal.matchdays), matchdaysLeft: Math.min(8, deal.matchdaysLeft) };
-        set({ borderSponsors: [...borderSponsors, cappedDeal] });
+        set({ borderSponsors: [...borderSponsors, cappedDeal], borderOfferIdx: borderOfferIdx + 1 });
       },
+      advanceBorderOfferIdx: () => set({ borderOfferIdx: get().borderOfferIdx + 1 }),
 
       hirePlayer: (player) => {
         const { rosters, managedTeamId, balance, transfersUsed, currentMatchday, financeHistory } = get();
@@ -658,7 +706,7 @@ export const useGameStore = create<GameStore>()(
     }),
     {
       name: 'ifog-game-state',
-      version: 1,
+      version: 2,
       migrate: (state: any) => {
         const total = (state.trainingMassage ?? 0) + (state.trainingSkills ?? 0) + (state.trainingShape ?? 0);
         if (total > 7) {
@@ -666,6 +714,8 @@ export const useGameStore = create<GameStore>()(
           state.trainingSkills = 4;
           state.trainingShape = 2;
         }
+        if (!Array.isArray(state.foodStock)) state.foodStock = Array(10).fill(800);
+        if (!Array.isArray(state.shopStock)) state.shopStock = Array(10).fill(40);
         return state;
       },
       storage: {

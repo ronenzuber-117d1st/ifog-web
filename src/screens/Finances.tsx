@@ -55,9 +55,9 @@ function generateShirtOffers(matchday: number, teamId: number, sessionSeed: numb
 
 interface BorderOffer { name: string; amt: number; len: number; }
 
-function generateBorderOffers(matchday: number, teamId: number, activeNames: string[], sessionSeed: number): BorderOffer[] {
-  // Shuffle order uses session seed so it differs every visit
-  const rng = lcg(matchday * 2673 + teamId * 13 + sessionSeed);
+function generateBorderOffers(matchday: number, teamId: number, activeNames: string[]): BorderOffer[] {
+  // Seeded by matchday only — same offers every visit within the same matchday
+  const rng = lcg(matchday * 2673 + teamId * 13);
   const pool = BORDER_COMPANIES.filter(name => !activeNames.includes(name));
   const picked: string[] = [];
   for (let i = 0; i < 5 && pool.length > 0; i++) {
@@ -124,12 +124,12 @@ function Board({ s, sz }: { s: BoardStyle; sz: number }) {
 
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export function Finances() {
-  const { managedTeamId, currentMatchday, balance, shirtSponsor, borderSponsors, rosters, transfersUsed, acceptShirtSponsor, acceptBorderDeal, hirePlayer, sellPlayer } = useGameStore();
+  const { managedTeamId, currentMatchday, balance, shirtSponsor, borderSponsors, borderOfferIdx, rosters, transfersUsed, acceptShirtSponsor, acceptBorderDeal, advanceBorderOfferIdx, hirePlayer, sellPlayer } = useGameStore();
   const [tab, setTab] = useState<Tab>('shirt');
   const [sessionSeed] = useState(() => Math.floor(Math.random() * 999983));
 
   const shirtOffers = useMemo(() => generateShirtOffers(currentMatchday, managedTeamId, sessionSeed), [currentMatchday, managedTeamId, sessionSeed]);
-  const borderOffers = useMemo(() => generateBorderOffers(currentMatchday, managedTeamId, borderSponsors.map(s => s.name), sessionSeed), [currentMatchday, managedTeamId, borderSponsors, sessionSeed]);
+  const borderOffers = useMemo(() => generateBorderOffers(currentMatchday, managedTeamId, borderSponsors.map(s => s.name)), [currentMatchday, managedTeamId, borderSponsors]);
   const hirePlayers = useMemo(() => generateHirePlayers(currentMatchday, managedTeamId), [currentMatchday, managedTeamId]);
   const myPlayers = rosters[managedTeamId] ?? [];
   const transfersLeft = 3 - transfersUsed;
@@ -157,7 +157,7 @@ export function Finances() {
             <ShirtTab shirtSponsor={shirtSponsor} shirtOffers={shirtOffers} onAccept={offer => acceptShirtSponsor(offer)} />
           )}
           {tab === 'borders' && (
-            <BordersTab borderSponsors={borderSponsors} borderOffers={borderOffers} onAccept={offer => acceptBorderDeal({ name: offer.name, amount: offer.amt, matchdays: offer.len, matchdaysLeft: offer.len })} />
+            <BordersTab borderSponsors={borderSponsors} borderOffers={borderOffers} offerIdx={borderOfferIdx} onAccept={offer => acceptBorderDeal({ name: offer.name, amount: offer.amt, matchdays: offer.len, matchdaysLeft: offer.len })} onForget={advanceBorderOfferIdx} />
           )}
           {tab === 'transfer' && (
             <TransferTab hirePlayers={hirePlayers} myPlayers={myPlayers} balance={balance} transfersLeft={transfersLeft} onHire={p => hirePlayer(p)} onSell={id => sellPlayer(id)} />
@@ -302,12 +302,13 @@ function ShirtTab({ shirtSponsor, shirtOffers, onAccept }: {
 }
 
 // ─── Borders tab ──────────────────────────────────────────────────────────────
-function BordersTab({ borderSponsors, borderOffers, onAccept }: {
+function BordersTab({ borderSponsors, borderOffers, offerIdx, onAccept, onForget }: {
   borderSponsors: SponsorDeal[];
   borderOffers: BorderOffer[];
+  offerIdx: number;
   onAccept: (o: BorderOffer) => void;
+  onForget: () => void;
 }) {
-  const [offerIdx, setOfferIdx] = useState(0);
   const cur = offerIdx < borderOffers.length ? borderOffers[offerIdx] : null;
   const empty = !cur;
   const full = borderSponsors.length >= 4;
@@ -353,6 +354,9 @@ function BordersTab({ borderSponsors, borderOffers, onAccept }: {
               {borderOffers.map((_, k) => (
                 <span key={k} style={{ width: 22, height: 6, borderRadius: 3, background: k < offerIdx ? '#3a4768' : k === offerIdx ? '#f5c76b' : '#1f2945', display: 'block' }} />
               ))}
+              {borderOffers.length === 0 && [0,1,2,3,4].map(k => (
+                <span key={k} style={{ width: 22, height: 6, borderRadius: 3, background: '#3a4768', display: 'block' }} />
+              ))}
             </div>
           </div>
 
@@ -378,8 +382,8 @@ function BordersTab({ borderSponsors, borderOffers, onAccept }: {
                 Worth <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, color: '#e8edf7' }}>{money(cur.amt * cur.len)}</span> over the deal
               </div>
               <div style={{ marginTop: 'auto', display: 'flex', gap: 10 }}>
-                <YeahhBtn onClick={() => { onAccept(cur); setOfferIdx(i => i + 1); }} />
-                <ForgetBtn onClick={() => setOfferIdx(i => i + 1)} />
+                <YeahhBtn onClick={() => { onAccept(cur); }} />
+                <ForgetBtn onClick={onForget} />
               </div>
             </>
           )}

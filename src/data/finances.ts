@@ -22,9 +22,58 @@ export const MERCH_ITEMS = ['Balls','Posters','Shirts','Glassware','Flags','Caps
 export const MERCH_PRICES = [40, 10, 100, 50, 100, 40, 10, 10, 100, 40];
 
 export const STARTING_BALANCE = 2_000_000;
-export const WAGES_PER_MATCHDAY = 120_000;
-export const FOOD_REVENUE_PER_MATCH = 65_000;
-export const MERCH_REVENUE_PER_MATCH = 45_000;
+
+/**
+ * Per-player wage per matchday.
+ * Base = skill² × 150  (steep skill curve)
+ * Potential bonus = max(0, 32 − age) × skill × 40  (young + skilled costs more)
+ * Examples: skill 9 / age 20 → £20,550  |  skill 5 / age 25 → £6,750  |  skill 3 / age 35 → £1,350
+ */
+export function calcPlayerWage(skill: number, age: number): number {
+  const base      = skill * skill * 150;
+  const potential = Math.max(0, 32 - age) * skill * 40;
+  return base + potential;
+}
+
+// Wholesale cost as fraction of sell price
+const FOOD_WHOLESALE_RATE = 0.30;
+const MERCH_WHOLESALE_RATE = 0.40;
+
+// Item popularity weights (relative, not absolute)
+const FOOD_POP  = [1.0, 1.2, 1.8, 1.6, 2.0, 0.6, 1.3, 1.7, 1.2, 1.0]; // Bubble Gum → ?Chicken
+const MERCH_POP = [1.0, 1.5, 3.0, 0.5, 1.8, 1.6, 1.2, 0.5, 0.4, 0.8]; // Balls → Computergames
+
+export interface StockSaleResult {
+  revenue: number;
+  stockCost: number;
+  unitsSold: number[];
+}
+
+// ~0.6 food items per fan at tier 3; tiers scale: 0.4 / 0.7 / 1.0
+export function calcFoodSales(attendance: number, tier: number): StockSaleResult {
+  const mult = [0, 0.4, 0.7, 1.0][tier] ?? 0;
+  const total = Math.floor(attendance * 0.6 * mult);
+  const sumPop = FOOD_POP.reduce((a, b) => a + b, 0);
+  const unitsSold = FOOD_POP.map(p => Math.floor(total * p / sumPop));
+  const revenue  = unitsSold.reduce((s, qty, i) => s + qty * FOOD_PRICES[i], 0);
+  const stockCost = Math.round(revenue * FOOD_WHOLESALE_RATE);
+  return { revenue, stockCost, unitsSold };
+}
+
+// ~0.045 merch items per fan at tier 3; same tier scale
+export function calcMerchSales(attendance: number, tier: number): StockSaleResult {
+  const mult = [0, 0.4, 0.7, 1.0][tier] ?? 0;
+  const total = Math.floor(attendance * 0.045 * mult);
+  const sumPop = MERCH_POP.reduce((a, b) => a + b, 0);
+  const unitsSold = MERCH_POP.map(p => Math.floor(total * p / sumPop));
+  const revenue  = unitsSold.reduce((s, qty, i) => s + qty * MERCH_PRICES[i], 0);
+  const stockCost = Math.round(revenue * MERCH_WHOLESALE_RATE);
+  return { revenue, stockCost, unitsSold };
+}
+
+export function calcTotalAttendance(demand: number, priceLevel: 'low' | 'medium' | 'high', seatsLevel: number): number {
+  return calcTicketSalesByDemand(demand, priceLevel, seatsLevel).reduce((s, n) => s + n, 0);
+}
 
 // Seat capacity multiplier by seats upgrade level (1–3)
 export const SEAT_SCALE = [1.0, 1.6, 2.5];
@@ -67,18 +116,3 @@ export function calcTicketRevenue(
   return sales.reduce((sum, qty, i) => sum + qty * prices[i], 0);
 }
 
-export function calcMatchRevenue(
-  isHome: boolean,
-  priceLevel: 'low' | 'medium' | 'high',
-  demand: number,
-  seatsLevel: number,
-  foodEnabled: boolean,
-  merchandiseEnabled: boolean,
-): number {
-  if (!isHome) return 0;
-  return (
-    calcTicketRevenue(priceLevel, demand, seatsLevel) +
-    (foodEnabled ? FOOD_REVENUE_PER_MATCH : 0) +
-    (merchandiseEnabled ? MERCH_REVENUE_PER_MATCH : 0)
-  );
-}

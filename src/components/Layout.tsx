@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/useGameStore';
 import { img } from '../utils/images';
 
-interface Props { children: React.ReactNode }
+interface Props { children: React.ReactNode; lockNav?: boolean }
 
 const NAV = [
   { to: '/season',   label: 'Table' },
@@ -20,7 +20,7 @@ function ordinal(n: number) {
   return n + (s[(v - 20) % 10] ?? s[v] ?? s[0]);
 }
 
-export function Layout({ children }: Props) {
+export function Layout({ children, lockNav = false }: Props) {
   const navigate = useNavigate();
   const { managedTeamId, currentMatchday, totalMatchdays, balance, table } = useGameStore();
   const [saved, setSaved] = useState(false);
@@ -79,6 +79,18 @@ export function Layout({ children }: Props) {
         <nav style={{ display: 'flex', height: 64, alignItems: 'stretch', flexShrink: 0 }}>
           {NAV.map(({ to, label }) => {
             const active = location.pathname === to;
+            const locked = lockNav && !active;
+            if (locked) {
+              return (
+                <span key={to} title="Match in progress" style={{
+                  display: 'flex', alignItems: 'center', padding: '0 14px',
+                  color: '#2a3656', fontWeight: 600, fontSize: 15,
+                  whiteSpace: 'nowrap', cursor: 'not-allowed', userSelect: 'none',
+                }}>
+                  {label}
+                </span>
+              );
+            }
             return (
               <Link key={to} to={to} style={{
                 display: 'flex', alignItems: 'center', padding: '0 14px',

@@ -42,8 +42,8 @@ const REFEREES = [
   { name: 'B. Bumble',    style: 'INCOMPETENT', desc: 'Bewildered. Open to persuasion.',        bribeable: false, color: '#c084fc', img: 'schieds1.png' },
 ];
 
-function pickReferee(matchday: number, teamId: number, sessionSeed: number) {
-  const hash = Math.abs(matchday * 7193 + teamId * 3761 + sessionSeed * 1009);
+function pickReferee(matchday: number, teamId: number) {
+  const hash = Math.abs(matchday * 7193 + teamId * 3761);
   return REFEREES[hash % REFEREES.length];
 }
 
@@ -161,8 +161,7 @@ export function MatchDay() {
 
   const myPlayers = (rosters[managedTeamId] ?? []).filter(p => !p.injuredFor && !p.suspended);
 
-  const [refSeed] = useState(() => Math.floor(Math.random() * 999983));
-  const referee = pickReferee(currentMatchday, managedTeamId, refSeed);
+  const referee = pickReferee(currentMatchday, managedTeamId);
   const [bribed, setBribed] = useState(false);
   const [phase, setPhase] = useState<'setup' | 'playing' | 'done'>('setup');
   const [showResultOverlay, setShowResultOverlay] = useState(false);
@@ -429,7 +428,7 @@ export function MatchDay() {
   }
 
   return (
-    <Layout>
+    <Layout lockNav={phase === 'playing'}>
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
         {phase === 'setup' && (
           <SetupPhase

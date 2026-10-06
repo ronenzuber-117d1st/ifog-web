@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { Layout } from '../components/Layout';
 import { img } from '../utils/images';
-import { TICKET_TYPES, TICKET_PRICE_PRESETS, FOOD_REVENUE_PER_MATCH, MERCH_REVENUE_PER_MATCH, calcTicketRevenue, calcDemand } from '../data/finances';
+import { TICKET_TYPES, TICKET_PRICE_PRESETS, calcTicketRevenue, calcDemand, calcFoodSales, calcMerchSales, calcTotalAttendance, calcPlayerWage } from '../data/finances';
 import { LEAGUE_TEAMS } from '../data/teams';
 import type { FinanceEntry } from '../types/game';
 
@@ -36,12 +36,18 @@ const TAB_LABELS: Record<DeskTab, string> = {
   'cash-week': 'Cash Week', bets: 'Bets', memo: 'Memo',
 };
 
-const EARN_CATS = ['Match day', 'Sponsorship', 'Media deal', 'Transfer fee', 'Betting', 'Ticket sales', 'Food stand', 'Club shop', 'VIP lounge'];
-const COST_CATS = ['Match day', 'Player purchase', 'Stadium', 'Personnel', 'Training', 'Bits & pieces', 'Betting'];
+const EARN_CATS = ['Ticket sales', 'Food stand', 'Fan shop', 'Sponsorship', 'Media deal', 'Transfer fee', 'Betting', 'Club event', 'Match day', 'VIP lounge'];
+const COST_CATS = ['Team wages', 'Food stand', 'Fan shop', 'Personnel', 'Stadium', 'Player purchase', 'Training', 'Bits & pieces', 'Betting', 'Club event', 'Match day'];
 
 function finCat(desc: string): string {
   const lower = desc.toLowerCase();
   if (lower.startsWith('home match') || lower.startsWith('away match')) return 'Match day';
+  if (lower === 'team wages') return 'Team wages';
+  if (lower === 'ticket sales') return 'Ticket sales';
+  if (lower.startsWith('fish&chips:')) return 'Food stand';
+  if (lower.startsWith('food stand')) return 'Food stand';
+  if (lower.startsWith('fan shop')) return 'Fan shop';
+  if (lower === 'club event') return 'Club event';
   if (lower.startsWith('border') || lower.startsWith('shirt sponsor')) return 'Sponsorship';
   if (lower.startsWith('media:')) return 'Media deal';
   if (lower.startsWith('transfer in:')) return 'Player purchase';
@@ -74,7 +80,7 @@ function computeOdds(homeBase: number, awayBase: number): [number, number] {
 export function Desk() {
   const {
     managerName, currentMatchday, totalMatchdays, balance, financeHistory,
-    priceLevel, setPriceLevel, mediaDeal,
+    priceLevel, setPriceLevel, mediaDeal, borderSponsors,
     rosters, managedTeamId, fixtures, table, stadium,
     staff, pendingBet, eventLog,
     setStaff, setCoach, placeBet, cancelBet,
@@ -284,31 +290,44 @@ export function Desk() {
                     const myRow    = table.find(r => r.teamId === managedTeamId);
                     const ppg      = myRow && myRow.played > 0 ? myRow.points / myRow.played : 1.5;
                     const demand   = calcDemand(position > 0 ? position : 10, ppg);
-                    const ticketRev = Math.round(calcTicketRevenue(priceLevel, demand, stadium.seats));
-                    const foodRev   = (staff.fishChips as number) > 0 ? FOOD_REVENUE_PER_MATCH : 0;
-                    const shopRev   = (staff.fanShop   as number) > 0 ? MERCH_REVENUE_PER_MATCH : 0;
-                    const mediaRev  = mediaDeal ? mediaDeal.revenuePerMatch : 0;
-                    const totalRev  = ticketRev + foodRev + shopRev + mediaRev;
-                    const rows: { label: string; amount: number; note: string }[] = [
-                      { label: 'Tickets',    amount: ticketRev, note: priceLevel },
-                      { label: 'Food stand', amount: foodRev,   note: (staff.fishChips as number) > 0 ? `Tier ${staff.fishChips} hired` : 'No staff hired' },
-                      { label: 'Fan shop',   amount: shopRev,   note: (staff.fanShop   as number) > 0 ? `Tier ${staff.fanShop} hired`   : 'No staff hired' },
-                      { label: 'Media deal', amount: mediaRev,  note: mediaDeal ? mediaDeal.name : 'No deal active' },
+                    const attendance = calcTotalAttendance(demand, priceLevel, stadium.seats);
+                    const ticketRev  = Math.round(calcTicketRevenue(priceLevel, demand, stadium.seats));
+                    const foodResult = (staff.fishChips as number) > 0 ? calcFoodSales(attendance, staff.fishChips as number) : null;
+                    const shopResult = (staff.fanShop   as number) > 0 ? calcMerchSales(attendance, staff.fanShop   as number) : null;
+                    const mediaRev   = mediaDeal ? mediaDeal.revenuePerMatch : 0;
+                    const borderRev  = borderSponsors.filter(d => d.matchdaysLeft > 0).reduce((s, d) => s + d.amount, 0);
+                    const foodRev    = foodResult ? foodResult.revenue : 0;
+                    const shopRev    = shopResult ? shopResult.revenue : 0;
+                    const squad      = rosters[managedTeamId] ?? [];
+                    const wagesBill  = squad.reduce((sum, p) => sum + calcPlayerWage(p.skill, p.age), 0);
+                    const activeBorders = borderSponsors.filter(d => d.matchdaysLeft > 0).length;
+                    const totalRev   = ticketRev + foodRev + shopRev + mediaRev + borderRev;
+                    const netPerMatch = totalRev - wagesBill;
+                    type Row = { label: string; amount: number; note: string; isNeg?: boolean };
+                    const rows: Row[] = [
+                      { label: 'Tickets',     amount: ticketRev,  note: `${attendance.toLocaleString()} fans · ${priceLevel} prices` },
+                      { label: 'Food stand',  amount: foodRev,    note: foodResult ? `est. · tier ${staff.fishChips}` : 'No staff hired' },
+                      { label: 'Fan shop',    amount: shopRev,    note: shopResult ? `est. · tier ${staff.fanShop}` : 'No staff hired' },
+                      { label: 'Media deal',  amount: mediaRev,   note: mediaDeal ? mediaDeal.name : 'No deal active' },
+                      { label: 'Boards',      amount: borderRev,  note: activeBorders > 0 ? `${activeBorders} active deal${activeBorders > 1 ? 's' : ''}` : 'No deals active' },
+                      { label: 'Team wages',  amount: wagesBill,  note: `${squad.length} players`, isNeg: true },
                     ];
                     return (
                       <div style={{ display: 'flex', flexDirection: 'column', padding: '14px 18px', borderRadius: 16, background: '#0f1628', border: '1px solid #1c2640' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
                           <div style={{ fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 800, fontSize: 22, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Revenue / Match</div>
-                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 15, color: '#5fd49a' }}>£{totalRev.toLocaleString()}</div>
+                          <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 15, color: netPerMatch >= 0 ? '#5fd49a' : '#ff7a6b' }}>
+                            {netPerMatch >= 0 ? '+' : ''}£{netPerMatch.toLocaleString()}
+                          </div>
                         </div>
-                        {rows.map(({ label, amount, note }) => (
+                        {rows.map(({ label, amount, note, isNeg }) => (
                           <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderTop: '1px solid #1c2640' }}>
                             <div>
-                              <div style={{ fontWeight: 600, fontSize: 14 }}>{label}</div>
-                              <div style={{ fontSize: 12, color: amount > 0 ? '#8d99b5' : '#3d4f72', marginTop: 1, textTransform: 'capitalize' }}>{note}</div>
+                              <div style={{ fontWeight: 600, fontSize: 14, color: isNeg ? '#ff7a6b' : '#e8edf7' }}>{label}</div>
+                              <div style={{ fontSize: 12, color: amount > 0 ? '#8d99b5' : '#3d4f72', marginTop: 1 }}>{note}</div>
                             </div>
-                            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 14, color: amount > 0 ? '#e8edf7' : '#3d4f72' }}>
-                              {amount > 0 ? `£${amount.toLocaleString()}` : '—'}
+                            <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 14, color: isNeg ? '#ff7a6b' : (amount > 0 ? '#e8edf7' : '#3d4f72') }}>
+                              {amount > 0 ? `${isNeg ? '−' : ''}£${amount.toLocaleString()}` : '—'}
                             </div>
                           </div>
                         ))}
