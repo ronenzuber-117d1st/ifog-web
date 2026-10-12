@@ -3,7 +3,7 @@ import { useGameStore } from '../store/useGameStore';
 import { Layout } from '../components/Layout';
 import { img } from '../utils/images';
 import { TICKET_TYPES, TICKET_PRICE_PRESETS, calcTicketRevenue, calcDemand, calcFoodSales, calcMerchSales, calcTotalAttendance, calcPlayerWage } from '../data/finances';
-import { LEAGUE_TEAMS } from '../data/teams';
+import { getTeamById } from '../data/teams';
 import type { FinanceEntry } from '../types/game';
 
 type DeskTab = 'desk' | 'personnel' | 'cash-season' | 'cash-week' | 'bets' | 'memo';
@@ -93,7 +93,7 @@ export function Desk() {
   const [cashWeekDay, setCashWeekDay] = useState(Math.max(1, currentMatchday - 1));
 
   const prices  = TICKET_PRICE_PRESETS[priceLevel];
-  const myTeam  = LEAGUE_TEAMS.find(t => t.id === managedTeamId)!;
+  const myTeam  = getTeamById(managedTeamId)!;
   const position = table.findIndex(r => r.teamId === managedTeamId) + 1;
 
   /* Squad */
@@ -109,7 +109,7 @@ export function Desk() {
   );
   const isHome   = nextFix?.homeTeamId === managedTeamId;
   const oppTeamId = isHome ? nextFix?.awayTeamId : nextFix?.homeTeamId;
-  const oppTeam  = LEAGUE_TEAMS.find(t => t.id === oppTeamId);
+  const oppTeam  = getTeamById(oppTeamId);
   const [myOdds, oppOdds] = nextFix
     ? computeOdds(isHome ? myTeam.baseSkill : (oppTeam?.baseSkill ?? 55), isHome ? (oppTeam?.baseSkill ?? 55) : myTeam.baseSkill)
     : [17, 17];
@@ -522,8 +522,8 @@ export function Desk() {
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                     {matchdayFixtures.map(f => {
-                      const home = LEAGUE_TEAMS.find(t => t.id === f.homeTeamId)!;
-                      const away = LEAGUE_TEAMS.find(t => t.id === f.awayTeamId)!;
+                      const home = getTeamById(f.homeTeamId)!;
+                      const away = getTeamById(f.awayTeamId)!;
                       const [h, a] = computeOdds(home.baseSkill, away.baseSkill);
                       const isMyMatch = f.homeTeamId === managedTeamId || f.awayTeamId === managedTeamId;
                       const isSel = nextFix?.id === f.id;

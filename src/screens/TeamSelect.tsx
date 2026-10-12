@@ -2,16 +2,17 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/useGameStore';
 import type { Difficulty } from '../store/useGameStore';
-import { LEAGUE_TEAMS } from '../data/teams';
+import { LEAGUE_TEAMS, DIV2_TEAMS } from '../data/teams';
 import { Badge } from '../components/Badge';
 import { img } from '../utils/images';
+import type { Team } from '../types/game';
 
-type Step = 'difficulty' | 'team' | 'portrait' | 'name';
+type Step = 'difficulty' | 'division' | 'team' | 'portrait' | 'name';
 
 const MALE_PORTRAITS   = ['manag1', 'manag2', 'manag3', 'manag4', 'manag5'];
 const FEMALE_PORTRAITS = ['manag6', 'manak2', 'manak4'];
-const N    = LEAGUE_TEAMS.length;
-const HALF = Math.floor(N / 2);
+const MAX_N    = 20;
+const HALF = Math.floor(MAX_N / 2);
 
 const SLOT_TX      = [0,   210,  370,  490];
 const SLOT_RY      = [0,   48,   63,   72 ];
@@ -31,8 +32,8 @@ const DIFFICULTY_OPTIONS: { key: Difficulty; label: string; img: string; balance
   { key: 'expert',       label: 'Expert',       img: 'mannsch3.png', balance: '£750,000',   desc: 'Tight budget. Only the best survive.',       color: '#f87171' },
 ];
 
-const STEPS: Step[] = ['difficulty', 'team', 'portrait', 'name'];
-const STEP_LABELS: Record<Step, string> = { difficulty: 'Level', team: 'Club', portrait: 'Manager', name: 'Name' };
+const STEPS: Step[] = ['difficulty', 'division', 'team', 'portrait', 'name'];
+const STEP_LABELS: Record<Step, string> = { difficulty: 'Level', division: 'League', team: 'Club', portrait: 'Manager', name: 'Name' };
 
 const BTN_PRIMARY: React.CSSProperties = {
   height: 44, padding: '0 22px', borderRadius: 10, border: 0,
@@ -51,24 +52,28 @@ export function TeamSelect() {
 
   const [step, setStep]             = useState<Step>('difficulty');
   const [difficulty, setDifficulty] = useState<Difficulty | null>(null);
+  const [division, setDivision]     = useState<1 | 2 | null>(null);
   const [centerIdx, setCenterIdx]   = useState(0);
   const [selectedPortrait, setSelectedPortrait] = useState('manag1');
   const [managerName, setManagerName]           = useState('');
 
-  const selectedTeam = LEAGUE_TEAMS[centerIdx];
+  const teams = division === 2 ? DIV2_TEAMS : LEAGUE_TEAMS;
+  const N = teams.length;
+  const selectedTeam = teams[centerIdx];
   const go = (dir: 1 | -1) => setCenterIdx(i => ((i + dir) % N + N) % N);
   const currentStepIdx = STEPS.indexOf(step);
 
   const handleStart = () => {
-    if (!managerName.trim() || !difficulty) return;
-    startNewGame(managerName.trim(), selectedTeam.id, selectedPortrait, difficulty);
+    if (!managerName.trim() || !difficulty || !division) return;
+    startNewGame(managerName.trim(), selectedTeam.id, selectedPortrait, difficulty, division);
     navigate('/season');
   };
 
   const handleBack = () => {
     if (step === 'name') setStep('portrait');
     else if (step === 'portrait') setStep('team');
-    else if (step === 'team') setStep('difficulty');
+    else if (step === 'team') setStep('division');
+    else if (step === 'division') setStep('difficulty');
     else navigate('/');
   };
 
@@ -167,7 +172,51 @@ export function TeamSelect() {
                 <button
                   style={difficulty ? BTN_PRIMARY : BTN_PRIMARY_DISABLED}
                   disabled={!difficulty}
-                  onClick={() => { if (difficulty) setStep('team'); }}
+                  onClick={() => { if (difficulty) setStep('division'); }}
+                >
+                  Next: Choose League →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── DIVISION ── */}
+          {step === 'division' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16, height: '100%', justifyContent: 'center' }}>
+              <div>
+                <h2 style={{ margin: 0, fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 900, fontSize: 36, letterSpacing: '0.02em', color: '#fff' }}>Choose Your League</h2>
+                <p style={{ margin: '4px 0 0', fontSize: 14, color: '#8d99b5' }}>Start at the top or work your way up from the First Division.</p>
+              </div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                {([
+                  { key: 1 as const, label: 'Premier League', sub: 'Division 1', desc: 'Top-flight football. 20 elite clubs. Compete for the title or survive relegation.', accent: '#c8f53d' },
+                  { key: 2 as const, label: 'First Division', sub: 'Division 2', desc: 'Lower league action. Win promotion in 3 seasons or the board will sack you.', accent: '#f59e0b' },
+                ]).map(opt => {
+                  const selected = division === opt.key;
+                  return (
+                    <button
+                      key={opt.key}
+                      onClick={() => setDivision(opt.key)}
+                      style={{
+                        flex: 1, background: selected ? `${opt.accent}10` : '#0f1628',
+                        border: `2px solid ${selected ? opt.accent : '#1c2640'}`,
+                        borderRadius: 14, padding: '28px 24px', cursor: 'pointer',
+                        boxShadow: selected ? `0 0 24px ${opt.accent}33` : 'none',
+                        textAlign: 'left', transition: 'border-color 0.15s, background 0.15s',
+                      }}
+                    >
+                      <div style={{ fontSize: 10, letterSpacing: '0.18em', textTransform: 'uppercase', color: opt.accent, marginBottom: 6, fontWeight: 700 }}>{opt.sub}</div>
+                      <div style={{ fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 900, fontSize: 32, textTransform: 'uppercase', color: '#fff', lineHeight: 1, marginBottom: 12 }}>{opt.label}</div>
+                      <div style={{ fontSize: 13, color: '#8d99b5', lineHeight: 1.5 }}>{opt.desc}</div>
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <button
+                  style={division ? BTN_PRIMARY : BTN_PRIMARY_DISABLED}
+                  disabled={!division}
+                  onClick={() => { if (division) { setCenterIdx(0); setStep('team'); } }}
                 >
                   Next: Choose Club →
                 </button>
@@ -180,7 +229,7 @@ export function TeamSelect() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14, height: '100%', justifyContent: 'center' }}>
               <div>
                 <h2 style={{ margin: 0, fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 900, fontSize: 36, letterSpacing: '0.02em', color: '#fff' }}>Choose Your Club</h2>
-                <p style={{ margin: '4px 0 0', fontSize: 14, color: '#8d99b5' }}>Browse all {N} clubs.</p>
+                <p style={{ margin: '4px 0 0', fontSize: 14, color: '#8d99b5' }}>Browse all {N} {division === 2 ? 'First Division' : 'Premier League'} clubs.</p>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -188,7 +237,7 @@ export function TeamSelect() {
 
                 <div style={{ flex: 1, overflow: 'hidden' }}>
                   <div style={{ position: 'relative', height: 220 }}>
-                    {LEAGUE_TEAMS.map((team, i) => {
+                    {teams.map((team, i) => {
                       const raw  = i - centerIdx;
                       const dist = (((raw % N) + N + HALF) % N) - HALF;
                       const absD = Math.abs(dist);
@@ -221,7 +270,7 @@ export function TeamSelect() {
 
               {/* Dots */}
               <div style={{ display: 'flex', justifyContent: 'center', gap: 5 }}>
-                {LEAGUE_TEAMS.map((_, i) => (
+                {teams.map((_, i) => (
                   <button key={i} onClick={() => setCenterIdx(i)} style={{ width: i === centerIdx ? 18 : 6, height: 6, borderRadius: 3, border: 'none', padding: 0, cursor: 'pointer', background: i === centerIdx ? '#c8f53d' : '#1c2640', transition: 'width 0.2s ease, background 0.2s ease' }} />
                 ))}
               </div>
@@ -303,7 +352,7 @@ export function TeamSelect() {
   );
 }
 
-function TeamCoverCard({ team, active }: { team: typeof LEAGUE_TEAMS[0]; active: boolean }) {
+function TeamCoverCard({ team, active }: { team: Team; active: boolean }) {
   const strength = Math.round(((team.baseSkill - 40) / 40) * 100);
   return (
     <div style={{

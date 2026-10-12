@@ -60,14 +60,23 @@ export function TeamManagement() {
   const formLines = formation.split('-').map(Number);
   const formNeed: Record<string, number> = { GK: 1, DEF: formLines[0], MID: formLines[1], FWD: formLines[2] };
 
-  const sel = new Set(startingXI ?? []);
+  const playerIds = new Set(players.map(p => p.id));
+  const cleanXI = (startingXI ?? []).filter(id => playerIds.has(id));
+  const sel = new Set(cleanXI);
 
   const toggle = (id: string, injured: boolean) => {
     if (injured) return;
-    const next = sel.has(id)
-      ? startingXI.filter(i => i !== id)
-      : [...startingXI, id];
-    setStartingXI(next);
+    if (sel.has(id)) {
+      setStartingXI(cleanXI.filter(i => i !== id));
+    } else {
+      const player = players.find(p => p.id === id);
+      if (player?.position === 'T') {
+        const withoutGKs = cleanXI.filter(xid => players.find(p => p.id === xid)?.position !== 'T');
+        setStartingXI([...withoutGKs, id]);
+      } else {
+        setStartingXI([...cleanXI, id]);
+      }
+    }
   };
 
   const groups = POS_ORDER.map(pos => {

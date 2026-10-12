@@ -1,5 +1,5 @@
 import type { TableRow } from '../types/game';
-import { LEAGUE_TEAMS } from '../data/teams';
+import { getTeamById } from '../data/teams';
 import { Badge } from './Badge';
 
 interface Props {
@@ -28,7 +28,7 @@ export function LeagueTable({ table, managedTeamId, compact }: Props) {
         </thead>
         <tbody>
           {rows.map((row, i) => {
-            const team = LEAGUE_TEAMS.find(t => t.id === row.teamId);
+            const team = getTeamById(row.teamId);
             if (!team) return null;
             const isManaged = row.teamId === managedTeamId;
             const gd = row.goalsFor - row.goalsAgainst;

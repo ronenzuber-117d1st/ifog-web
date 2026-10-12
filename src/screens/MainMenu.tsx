@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/useGameStore';
-import { LEAGUE_TEAMS } from '../data/teams';
+import { getTeamById } from '../data/teams';
 import { img } from '../utils/images';
 
 function ordinal(n: number) {
@@ -16,7 +16,7 @@ export function MainMenu() {
   const { phase, resetGame, managedTeamId, currentMatchday, totalMatchdays, table, fixtures, balance } = useGameStore();
   const hasGame = phase !== 'menu';
 
-  const myTeam = hasGame ? LEAGUE_TEAMS.find(t => t.id === managedTeamId) : null;
+  const myTeam = hasGame ? getTeamById(managedTeamId) : null;
   const position = hasGame ? table.findIndex(r => r.teamId === managedTeamId) + 1 : 0;
 
   const nextFixture = hasGame ? fixtures.find(f =>
@@ -26,7 +26,7 @@ export function MainMenu() {
   ) : null;
   const isNextHome = nextFixture?.homeTeamId === managedTeamId;
   const opponentId = isNextHome ? nextFixture?.awayTeamId : nextFixture?.homeTeamId;
-  const opponent = opponentId ? LEAGUE_TEAMS.find(t => t.id === opponentId) : null;
+  const opponent = opponentId ? getTeamById(opponentId) : null;
   const nextInfo = opponent
     ? `Next: ${opponent.name} (${isNextHome ? 'home' : 'away'})`
     : currentMatchday > (totalMatchdays || 38) ? 'Season complete' : '';
@@ -159,19 +159,20 @@ export function MainMenu() {
           </label>
 
           {/* Bottom row */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 4px 0' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', padding: '6px 4px 0' }}>
+            <div style={{ fontSize: 12, lineHeight: 1.7 }}>
+              <div style={{ color: '#8d99b5', fontWeight: 600 }}>By Ronen Zuberblat · Made with Claude Code</div>
+              <div style={{ color: '#6b7797' }}>Inspired by the 1996 classic by Anguilla Software International Ltd.</div>
+            </div>
             {hasGame ? (
               <button
                 onClick={() => { resetGame(); navigate('/'); }}
-                style={{ height: 44, padding: '0 14px 0 10px', borderRadius: 10, border: '1px solid transparent', background: 'transparent', color: '#ff8a83', fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontFamily: "'Barlow', system-ui, sans-serif" }}
+                style={{ height: 44, padding: '0 14px 0 10px', borderRadius: 10, border: '1px solid transparent', background: 'transparent', color: '#ff8a83', fontWeight: 600, fontSize: 14, display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontFamily: "'Barlow', system-ui, sans-serif", flexShrink: 0 }}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M6 7l1 13h10l1-13"/><path d="M9 7V4h6v3"/></svg>
                 Abandon season
               </button>
-            ) : <div />}
-            <div style={{ fontSize: 12, color: '#6b7797', textAlign: 'right', lineHeight: 1.5 }}>
-              Inspired by the 1996 classic<br />by Anguilla Software International Ltd.
-            </div>
+            ) : null}
           </div>
         </div>{/* end buttons */}
         </div>{/* end inner wrapper */}

@@ -45,6 +45,28 @@ function teamDefSkill(team: Team, players: Player[], formation: Formation): numb
   return (team.baseSkill + avgPlayerSkill * 2) * mods.def;
 }
 
+/**
+ * Weighted fraction of full-strength player-time over 90 minutes.
+ * Red card at minute 2  → ~0.91 (team plays most of match down a man)
+ * Red card at minute 45 → ~0.955 (only second half affected)
+ * No red cards          → 1.0
+ */
+function calcPlayerFactor(redCardMinutes: number[]): number {
+  const sorted = [...redCardMinutes].sort((a, b) => a - b);
+  let sum = 0;
+  let prevMin = 0;
+  let players = 11;
+
+  for (const min of sorted) {
+    sum += players * (min - prevMin);
+    players = Math.max(7, players - 1);
+    prevMin = min;
+  }
+  sum += players * (90 - prevMin);
+
+  return sum / (90 * 11);
+}
+
 export function simulateMatch(
   homeTeam: Team,
   awayTeam: Team,
@@ -53,11 +75,19 @@ export function simulateMatch(
   homeFormation: Formation,
   awayFormation: Formation,
   managedTeamMod = 1,
+  aggression = 50,
+  playerIsHome = true,
+  homePlayerFactor = 1,
+  awayPlayerFactor = 1,
 ): { homeGoals: number; awayGoals: number } {
-  const homeAtk = teamEffectiveSkill(homeTeam, homePlayers, homeFormation) * managedTeamMod;
-  const awayAtk = teamEffectiveSkill(awayTeam, awayPlayers, awayFormation);
-  const homeDef = teamDefSkill(homeTeam, homePlayers, homeFormation) * managedTeamMod;
-  const awayDef = teamDefSkill(awayTeam, awayPlayers, awayFormation);
+  const aggrRatio = aggression / 100;
+  const aggrAtkMod = 0.85 + aggrRatio * 0.30;
+  const aggrDefMod = 1.10 - aggrRatio * 0.20;
+
+  const homeAtk = teamEffectiveSkill(homeTeam, homePlayers, homeFormation) * managedTeamMod * (playerIsHome ? aggrAtkMod : 1) * homePlayerFactor;
+  const awayAtk = teamEffectiveSkill(awayTeam, awayPlayers, awayFormation) * (!playerIsHome ? aggrAtkMod : 1) * awayPlayerFactor;
+  const homeDef = teamDefSkill(homeTeam, homePlayers, homeFormation) * managedTeamMod * (playerIsHome ? aggrDefMod : 1) * homePlayerFactor;
+  const awayDef = teamDefSkill(awayTeam, awayPlayers, awayFormation) * (!playerIsHome ? aggrDefMod : 1) * awayPlayerFactor;
 
   const homeAdv = 5;
   const expHome = Math.max(0.1, (homeAtk + homeAdv - awayDef) / 20 + 0.8);
@@ -74,15 +104,66 @@ export function simulateFullMatch(
   awayPlayers: Player[],
   formation: Formation,
   managedTeamMod = 1,
+  aggression = 50,
+  playerIsHome = true,
 ): MatchReport {
-  const { homeGoals, awayGoals } = simulateMatch(
-    homeTeam, awayTeam, homePlayers, awayPlayers, formation, '4-4-2', managedTeamMod,
-  );
-
+  const aggrRatio = aggression / 100;
   const events: MatchEvent[] = [];
   const used = new Set<number>();
+  const yellowedPlayers = new Map<string, number>();
 
-  // -- Goals --
+  // -- Step 1: Generate card events first so red cards inform the score calculation --
+  const cardMod = 0.5 + aggrRatio * 1.3;
+  const yellowCount = Math.max(0, poisson(2.2 * cardMod));
+
+  for (let i = 0; i < yellowCount; i++) {
+    const all = [...homePlayers, ...awayPlayers];
+    if (all.length === 0) break;
+    const p = pick(all);
+    const teamId = homePlayers.includes(p) ? homeTeam.id : awayTeam.id;
+    const prev = yellowedPlayers.get(p.name) ?? 0;
+    if (prev >= 2) continue;
+    if (prev >= 1) {
+      events.push({ minute: freshMinute(used), type: 'red', teamId, playerName: p.name, detail: '2Y' });
+      yellowedPlayers.set(p.name, 2);
+    } else {
+      events.push({ minute: freshMinute(used), type: 'yellow', teamId, playerName: p.name });
+      yellowedPlayers.set(p.name, prev + 1);
+    }
+  }
+
+  // Straight red card — 2% at gentle, 14% at reckless
+  if (Math.random() < 0.02 + aggrRatio * 0.12) {
+    const all = [...homePlayers, ...awayPlayers];
+    if (all.length > 0) {
+      const p = pick(all);
+      if ((yellowedPlayers.get(p.name) ?? 0) < 2) {
+        const teamId = homePlayers.includes(p) ? homeTeam.id : awayTeam.id;
+        events.push({ minute: freshMinute(used), type: 'red', teamId, playerName: p.name });
+        yellowedPlayers.set(p.name, 2);
+      }
+    }
+  }
+
+  // -- Step 2: Derive player-count factors from red card timing --
+  const homeRedMins = events
+    .filter(e => e.type === 'red' && e.teamId === homeTeam.id)
+    .map(e => e.minute);
+  const awayRedMins = events
+    .filter(e => e.type === 'red' && e.teamId === awayTeam.id)
+    .map(e => e.minute);
+
+  const homePlayerFactor = calcPlayerFactor(homeRedMins);
+  const awayPlayerFactor = calcPlayerFactor(awayRedMins);
+
+  // -- Step 3: Score, now aware of each team's effective strength --
+  const { homeGoals, awayGoals } = simulateMatch(
+    homeTeam, awayTeam, homePlayers, awayPlayers, formation, '4-4-2',
+    managedTeamMod, aggression, playerIsHome,
+    homePlayerFactor, awayPlayerFactor,
+  );
+
+  // -- Step 4: Goal events --
   const addGoals = (count: number, teamId: number, squad: Player[], oppSquad: Player[]) => {
     for (let i = 0; i < count; i++) {
       const min = freshMinute(used);
@@ -116,37 +197,6 @@ export function simulateFullMatch(
     }
   }
 
-  // -- Yellow cards (average 2-3 per match) --
-  const yellowCount = Math.max(1, poisson(2.2));
-  const yellowedPlayers = new Map<string, number>();
-
-  for (let i = 0; i < yellowCount; i++) {
-    const all = [...homePlayers, ...awayPlayers];
-    if (all.length === 0) break;
-    const p = pick(all);
-    const teamId = homePlayers.includes(p) ? homeTeam.id : awayTeam.id;
-    const prev = yellowedPlayers.get(p.name) ?? 0;
-    if (prev >= 1) {
-      events.push({ minute: freshMinute(used), type: 'red', teamId, playerName: p.name, detail: '2Y' });
-      yellowedPlayers.set(p.name, 2);
-    } else {
-      events.push({ minute: freshMinute(used), type: 'yellow', teamId, playerName: p.name });
-      yellowedPlayers.set(p.name, prev + 1);
-    }
-  }
-
-  // -- Straight red card (8% chance) --
-  if (Math.random() < 0.08) {
-    const all = [...homePlayers, ...awayPlayers];
-    if (all.length > 0) {
-      const p = pick(all);
-      if ((yellowedPlayers.get(p.name) ?? 0) < 2) {
-        const teamId = homePlayers.includes(p) ? homeTeam.id : awayTeam.id;
-        events.push({ minute: freshMinute(used), type: 'red', teamId, playerName: p.name });
-      }
-    }
-  }
-
   // -- Injury (35% chance) --
   if (Math.random() < 0.35) {
     const all = [...homePlayers, ...awayPlayers];
@@ -157,7 +207,17 @@ export function simulateFullMatch(
     }
   }
 
+  // -- Sort then strip any events for already-dismissed players --
   events.sort((a, b) => a.minute - b.minute);
+
+  const sentOff = new Set<string>();
+  const filteredEvents = events.filter(evt => {
+    if (sentOff.has(evt.playerName)) return false;
+    if (evt.type === 'red') sentOff.add(evt.playerName);
+    return true;
+  });
+  events.length = 0;
+  events.push(...filteredEvents);
 
   const allPlayers = [...homePlayers, ...awayPlayers];
   const manOfMatch = allPlayers[Math.floor(Math.random() * allPlayers.length)]?.name ?? 'Unknown';

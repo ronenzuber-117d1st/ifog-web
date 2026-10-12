@@ -1,6 +1,6 @@
 export type Position = 'T' | 'V' | 'M' | 'S';
 export type Formation = '4-4-2' | '4-3-3' | '3-5-2' | '5-3-2' | '4-5-1';
-export type GamePhase = 'menu' | 'select' | 'setup' | 'season' | 'matchday' | 'result';
+export type GamePhase = 'menu' | 'select' | 'setup' | 'season' | 'matchday' | 'result' | 'sacked' | 'season_end';
 
 export interface Player {
   id: string;
@@ -64,6 +64,8 @@ export interface GameEvent {
   moneyEffect: number;
   pointsEffect: number;
   kind: 'good' | 'bad' | 'neutral' | 'funny';
+  playerEffect?: 'injure' | 'absent' | 'retire'; // injure=1-3 random, absent=effectGames, retire=removed
+  effectGames?: number; // used by 'absent'
 }
 
 export interface FinanceEntry {

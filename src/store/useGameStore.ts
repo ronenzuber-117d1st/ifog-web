@@ -17,9 +17,71 @@ function computeXI(players: Player[], formation: Formation): string[] {
   });
   return ids;
 }
-import { LEAGUE_TEAMS, getAllRosters } from '../data/teams';
+
+const ALL_FORMATIONS: Formation[] = ['4-4-2', '4-3-3', '3-5-2', '5-3-2', '4-5-1'];
+
+// After injuries/suspensions, keep preferred players and fill gaps with best bench.
+// Falls back to alternative formations if the current one can't be filled.
+function revalidateXI(
+  currentXI: string[],
+  players: Player[],
+  currentFormation: Formation,
+): { xi: string[]; formation: Formation } {
+  const playerMap = new Map(players.map(p => [p.id, p]));
+  const available = players.filter(p => !p.injuredFor && !p.suspended);
+  const availableSet = new Set(available.map(p => p.id));
+
+  function tryFormation(formation: Formation, preferred: string[]): string[] | null {
+    const lines = formation.split('-').map(Number);
+    const needs: Record<Position, number> = { T: 1, V: lines[0], M: lines[1], S: lines[2] };
+    const posCount: Record<Position, number> = { T: 0, V: 0, M: 0, S: 0 };
+    const selected: string[] = [];
+    const selectedSet = new Set<string>();
+
+    // Keep preferred players that are still available and fit the position need
+    for (const id of preferred) {
+      if (!availableSet.has(id)) continue;
+      const p = playerMap.get(id);
+      if (!p || posCount[p.position] >= needs[p.position]) continue;
+      selected.push(id);
+      selectedSet.add(id);
+      posCount[p.position]++;
+    }
+
+    // Fill remaining slots with best available bench players by position
+    const bench = available.filter(p => !selectedSet.has(p.id)).sort((a, b) => b.skill - a.skill);
+    for (const pos of POS_ORDER) {
+      let needed = needs[pos] - posCount[pos];
+      for (const p of bench) {
+        if (needed <= 0) break;
+        if (p.position === pos && !selectedSet.has(p.id)) {
+          selected.push(p.id);
+          selectedSet.add(p.id);
+          needed--;
+        }
+      }
+    }
+
+    return selected.length === 11 ? selected : null;
+  }
+
+  // 1. Try current formation
+  const xi = tryFormation(currentFormation, currentXI);
+  if (xi) return { xi, formation: currentFormation };
+
+  // 2. Try alternative formations
+  for (const f of ALL_FORMATIONS) {
+    if (f === currentFormation) continue;
+    const alt = tryFormation(f, currentXI);
+    if (alt) return { xi: alt, formation: f };
+  }
+
+  // 3. Not enough players — return whatever we can
+  return { xi: computeXI(players, currentFormation), formation: currentFormation };
+}
+import { getTeamById, getSeasonTeamIds, getAllRosters, pickShirtNumber } from '../data/teams';
 import { GAME_EVENTS, CHAIRMAN_MESSAGES } from '../data/events';
-import { STARTING_BALANCE, FOOD_PRICES, MERCH_PRICES, calcPlayerWage, calcTicketRevenue, calcDemand, calcFoodSales, calcMerchSales, calcTotalAttendance } from '../data/finances';
+import { STARTING_BALANCE, FOOD_PRICES, MERCH_PRICES, TICKET_PRICE_PRESETS, calcPlayerWage, calcTicketRevenue, calcTicketSalesByDemand, calcDemand, calcFoodSales, calcMerchSales, calcTotalAttendance } from '../data/finances';
 import { generateFixtures } from '../engine/scheduler';
 import { simulateFullMatch, simulateMatch } from '../engine/matchEngine';
 
@@ -42,6 +104,7 @@ export interface StadiumState {
   seats: number;      // 1-3
   facilities: number; // 1-3
   lights: number;     // 1-3
+  vipLounge: number;  // 0=not built, 1-3 (capped by seats level)
 }
 
 export interface StaffState {
@@ -100,12 +163,22 @@ export interface GameStore {
   // Media
   mediaDeal: MediaDeal | null;
 
+  // Division / career
+  division: 1 | 2;
+  seasonsInDivision: number;
+
   // Stock
   foodStock: number[];
   shopStock: number[];
 
-  startNewGame: (managerName: string, teamId: number, portrait?: string, difficulty?: Difficulty) => void;
-  playMatchday: (liveReport?: MatchReport) => void;
+  // Magazine chairman — fixed portrait for the season, different from player's avatar
+  chairmanPortraitIdx: number;
+
+  // End-of-game state
+  sackReason: string | null;
+
+  startNewGame: (managerName: string, teamId: number, portrait?: string, difficulty?: Difficulty, division?: 1 | 2, seasonsInDivision?: number) => void;
+  playMatchday: (liveReport?: MatchReport, bribed?: boolean) => void;
   setFormation: (f: Formation) => void;
   setStartingXI: (ids: string[]) => void;
   trainPlayer: (playerId: string) => void;
@@ -121,6 +194,7 @@ export interface GameStore {
   hirePlayer: (player: Player) => void;
   sellPlayer: (playerId: string) => void;
   upgradeStadium: (type: 'pitch' | 'seats' | 'facilities' | 'lights') => void;
+  buyVipLounge: () => void;
   bribeReferee: () => void;
   resetGame: () => void;
   setStaff: (role: keyof Omit<StaffState, 'coach'>, tier: number) => void;
@@ -130,6 +204,7 @@ export interface GameStore {
   signMediaDeal: (deal: MediaDeal) => void;
   cancelMediaDeal: () => void;
   bookPracticeMatch: () => void;
+  startNewSeason: () => void;
 }
 
 function makeTableRow(teamId: number): TableRow {
@@ -162,9 +237,54 @@ function applyResult(row: TableRow, gf: number, ga: number): TableRow {
   };
 }
 
-function pickEvent(): GameEvent | null {
+function pickEvent(ctx: {
+  bribed?: boolean;
+  staff: StaffState;
+  stadium: StadiumState;
+  table: TableRow[];
+  managedTeamId: number;
+  squad: Player[];
+}): GameEvent | null {
+  const { bribed, staff, stadium, table, managedTeamId, squad } = ctx;
+
+  // #7 bribe-caught: only fires when player actually bribed, 35% chance
+  if (bribed && Math.random() < 0.35) {
+    return GAME_EVENTS.find(e => e.id === 7) ?? null;
+  }
+
+  // 65% chance no event at all
   if (Math.random() > 0.35) return null;
-  return GAME_EVENTS[Math.floor(Math.random() * GAME_EVENTS.length)];
+
+  // Compute position (1-based) for #8 guard
+  const sorted = [...table].sort((a, b) =>
+    b.points - a.points || (b.goalsFor - b.goalsAgainst) - (a.goalsFor - a.goalsAgainst)
+  );
+  const myPos = sorted.findIndex(r => r.teamId === managedTeamId) + 1;
+
+  const hasUpgrade = stadium.pitch > 1 || stadium.seats > 1 || stadium.facilities > 1 || stadium.lights > 1;
+  const hasPlayers  = squad.length > 0;
+
+  const pool = GAME_EVENTS.filter(e => {
+    switch (e.id) {
+      case 7:  return false;                      // bribe — handled above
+      case 2:  return staff.fishChips > 0;        // fast food confiscated: need food stand
+      case 4:  return staff.fanShop > 0;          // fan shop burns: need fan shop
+      case 8:  return myPos > 0 && myPos <= 6;    // manager of the month: top 6 only
+      case 27: return hasUpgrade;                 // planning permission: need an upgrade
+      case 1: case 3: case 10: case 14:
+      case 22: case 23: case 24: case 25: case 26:
+        return hasPlayers;                        // player effects: need an active player
+      default: return true;
+    }
+  });
+
+  if (pool.length === 0) return null;
+  const picked = pool[Math.floor(Math.random() * pool.length)];
+
+  // #28 secretary mistake: extra 50% dampener so it's rarer
+  if (picked.id === 28 && Math.random() < 0.5) return null;
+
+  return picked;
 }
 
 function chairmanMsg(name: string, position: number): string {
@@ -179,6 +299,8 @@ const STADIUM_UPGRADE_COST: Record<string, number[]> = {
   facilities: [0, 100_000, 250_000],
   lights:     [0, 150_000, 350_000],
 };
+
+const VIP_LOUNGE_COSTS = [0, 150_000, 350_000, 700_000];
 
 export const useGameStore = create<GameStore>()(
   persist(
@@ -210,20 +332,28 @@ export const useGameStore = create<GameStore>()(
       shirtSponsor: null,
       borderSponsors: [],
       borderOfferIdx: 0,
-      stadium: { pitch: 1, seats: 1, facilities: 1, lights: 1 },
+      stadium: { pitch: 1, seats: 1, facilities: 1, lights: 1, vipLounge: 0 },
       staff: { fishChips: 0, fanShop: 0, ticketSales: 0, cheerleader: 0, coach: 0 },
       pendingBet: null,
       eventLog: [],
       mediaDeal: null,
       foodStock: Array(10).fill(0),
       shopStock: Array(10).fill(0),
+      chairmanPortraitIdx: 0,
+      sackReason: null,
+      division: 1,
+      seasonsInDivision: 1,
 
-      startNewGame: (managerName, teamId, portrait, difficulty = 'intermediate') => {
-        const rosters = getAllRosters();
-        const teamIds = LEAGUE_TEAMS.map(t => t.id);
-        const fixtures = generateFixtures(teamIds);
-        const table = LEAGUE_TEAMS.map(t => makeTableRow(t.id));
+      startNewGame: (managerName, teamId, portrait, difficulty = 'intermediate', division = 1, seasonsInDivision = 1) => {
+        const seasonTeamIds = getSeasonTeamIds(division, teamId);
+        const rosters = getAllRosters(seasonTeamIds);
+        const fixtures = generateFixtures(seasonTeamIds);
+        const table = seasonTeamIds.map(id => makeTableRow(id));
         const defaultPortrait = `manag${((teamId - 1) % 6) + 1}`;
+        // Pick a chairman portrait that's different from the player's avatar (20 portraits total)
+        const playerIdx = (teamId - 1) % 20;
+        let chairmanIdx = Math.floor(Math.random() * 19);
+        if (chairmanIdx >= playerIdx) chairmanIdx++;
         const startingBalances: Record<Difficulty, number> = {
           beginner:     3_000_000,
           intermediate: STARTING_BALANCE,
@@ -257,19 +387,23 @@ export const useGameStore = create<GameStore>()(
           shirtSponsor: null,
           borderSponsors: [],
           borderOfferIdx: 0,
-          stadium: { pitch: 1, seats: 1, facilities: 1, lights: 1 },
+          stadium: { pitch: 1, seats: 1, facilities: 1, lights: 1, vipLounge: 0 },
           staff: { fishChips: 0, fanShop: 0, ticketSales: 0, cheerleader: 0, coach: 0 },
           pendingBet: null,
           eventLog: [],
           mediaDeal: null,
           foodStock: Array(10).fill(800),
           shopStock: Array(10).fill(40),
+          chairmanPortraitIdx: chairmanIdx,
+          sackReason: null,
+          division,
+          seasonsInDivision,
         });
       },
 
-      playMatchday: (liveReport?: MatchReport) => {
+      playMatchday: (liveReport?: MatchReport, bribed?: boolean) => {
         const s = get();
-        const { currentMatchday, fixtures, rosters, managedTeamId, formation, startingXI, table, balance, financeHistory, managerName, priceLevel, foodEnabled, merchandiseEnabled, trainingSkills, trainingShape, borderSponsors, stadium, difficulty, staff, pendingBet, eventLog, mediaDeal, foodStock, shopStock } = s;
+        const { currentMatchday, totalMatchdays, fixtures, rosters, managedTeamId, formation, startingXI, table, balance, financeHistory, managerName, priceLevel, foodEnabled, merchandiseEnabled, trainingSkills, trainingShape, borderSponsors, stadium, difficulty, staff, pendingBet, eventLog, mediaDeal, foodStock, shopStock } = s;
         const xiSet = new Set(startingXI ?? []);
 
         const dayFixtures = fixtures.filter(f => f.matchday === currentMatchday && !f.homeGoals && f.homeGoals !== 0);
@@ -284,8 +418,8 @@ export const useGameStore = create<GameStore>()(
         const trainingMod = (1 + (trainingSkills * 0.008) + (trainingShape * 0.005) + (stadium.pitch - 1) * 0.02 + coachTrainingBonus) * difficultyMod;
 
         for (const fixture of dayFixtures) {
-          const homeTeam = LEAGUE_TEAMS.find(t => t.id === fixture.homeTeamId)!;
-          const awayTeam = LEAGUE_TEAMS.find(t => t.id === fixture.awayTeamId)!;
+          const homeTeam = getTeamById(fixture.homeTeamId)!;
+          const awayTeam = getTeamById(fixture.awayTeamId)!;
           const homePlayers = rosters[fixture.homeTeamId] ?? [];
           const awayPlayers = rosters[fixture.awayTeamId] ?? [];
 
@@ -341,7 +475,12 @@ export const useGameStore = create<GameStore>()(
         const myPosition = table.findIndex(r => r.teamId === managedTeamId) + 1;
         const ppg = myRow && myRow.played > 0 ? myRow.points / myRow.played : 1.5;
         const demand = calcDemand(myPosition > 0 ? myPosition : 10, ppg);
-        const ticketRevenue = isHomeMatch ? calcTicketRevenue(priceLevel, demand, stadium.seats) : 0;
+        const rawTicketRevenue = isHomeMatch ? calcTicketRevenue(priceLevel, demand, stadium.seats) : 0;
+        const ticketRevenue = (() => {
+          if (!isHomeMatch || stadium.vipLounge > 0) return rawTicketRevenue;
+          const vipQty = calcTicketSalesByDemand(demand, priceLevel, stadium.seats)[7];
+          return rawTicketRevenue - vipQty * TICKET_PRICE_PRESETS[priceLevel][7];
+        })();
         const attendance    = isHomeMatch ? calcTotalAttendance(demand, priceLevel, stadium.seats) : 0;
 
         // Cap demand-based unit sales by actual stock on hand
@@ -360,7 +499,8 @@ export const useGameStore = create<GameStore>()(
         const matchRevenue = ticketRevenue + foodRevenue + shopRevenue;
         const net = matchRevenue - wages;
 
-        const event = pickEvent();
+        const activePlayers = squad.filter(p => !p.injuredFor && !p.suspended);
+        const event = pickEvent({ bribed, staff, stadium, table, managedTeamId, squad: activePlayers });
         const eventMoney = event ? event.moneyEffect : 0;
         const eventPoints = event ? event.pointsEffect : 0;
 
@@ -419,8 +559,14 @@ export const useGameStore = create<GameStore>()(
 
         const finalBalance = newBalance + betResult;
 
-        const scorerName = lastMatch?.events?.find(e => e.type === 'goal')?.playerName ?? 'a player';
-        const pendingEventResolved = event ? { ...event, text: event.text.replace(/X/g, scorerName) } : null;
+        // Pick a random fit player to be the subject of player-affecting events
+        const fitSquad = squad.filter(p => !p.injuredFor && !p.suspended);
+        const eventPlayer = event?.text.includes('X')
+          ? (fitSquad.length > 0 ? fitSquad[Math.floor(Math.random() * fitSquad.length)] : squad[0] ?? null)
+          : null;
+        const pendingEventResolved = event
+          ? { ...event, text: event.text.replace(/X/g, eventPlayer?.name ?? 'a player') }
+          : null;
         const newEventLog = pendingEventResolved
           ? [...eventLog, { matchday: currentMatchday, text: pendingEventResolved.text }]
           : eventLog;
@@ -509,15 +655,45 @@ export const useGameStore = create<GameStore>()(
             // Accumulate goals from match events
             const scored = goalEvents.filter(e => e.playerName === p.name).length;
             if (scored > 0) next = { ...next, goals: (next.goals ?? 0) + scored };
-            // Injury chance: 8%/2% normally; Diana Dancer (Flower Power) reduces to 5%/1%
-            if (next.injuredFor === 0 && !next.suspended) {
-              const chance = xiSet.has(p.id) ? (staff.coach === 2 ? 0.05 : 0.08) : (staff.coach === 2 ? 0.01 : 0.02);
+            // Injury chance for starters only; Diana Dancer (Flower Power) reduces from 8% to 5%
+            if (next.injuredFor === 0 && !next.suspended && xiSet.has(p.id)) {
+              const chance = staff.coach === 2 ? 0.05 : 0.08;
               if (Math.random() < chance) {
                 next = { ...next, injuredFor: 1 + Math.floor(Math.random() * 3) };
               }
             }
             return next;
           });
+
+          // Apply player effect from random event
+          if (event?.playerEffect && eventPlayer) {
+            if (event.playerEffect === 'retire') {
+              newRosters[managedTeamId] = newRosters[managedTeamId].filter(p => p.id !== eventPlayer.id);
+            } else {
+              const games = event.effectGames ?? (1 + Math.floor(Math.random() * 3));
+              newRosters[managedTeamId] = newRosters[managedTeamId].map(p =>
+                p.id === eventPlayer.id ? { ...p, injuredFor: Math.max(p.injuredFor, games) } : p
+              );
+            }
+          }
+        }
+
+        // Revalidate starting XI — replace unavailable players, fall back to alt formation if needed
+        const { xi: newXI, formation: newFormation } = revalidateXI(
+          startingXI,
+          newRosters[managedTeamId] ?? [],
+          formation,
+        );
+
+        // Determine end phase
+        let endPhase: import('../types/game').GamePhase = 'result';
+        let newSackReason: string | null = null;
+
+        if (currentMatchday >= totalMatchdays) {
+          endPhase = 'season_end';
+        } else if (finalBalance < -1_000_000) {
+          endPhase = 'sacked';
+          newSackReason = `The club is £${Math.abs(Math.round(finalBalance / 1_000)).toLocaleString()}K in debt. The board cannot allow this to continue.`;
         }
 
         set({
@@ -530,7 +706,10 @@ export const useGameStore = create<GameStore>()(
           currentMatchday: currentMatchday + 1,
           chairmanMessage: chairmanMsg(managerName, pos),
           rosters: newRosters,
-          phase: 'result',
+          startingXI: newXI,
+          formation: newFormation,
+          phase: endPhase,
+          sackReason: newSackReason,
           transfersUsed: 0,
           borderSponsors: newBorderSponsors,
           borderOfferIdx: 0,
@@ -603,8 +782,10 @@ export const useGameStore = create<GameStore>()(
         const cost = player.skill * 75_000;
         if (transfersUsed >= 3 || balance < cost) return;
         const players = rosters[managedTeamId] ?? [];
+        const usedNumbers = new Set(players.map(p => p.shirtNumber).filter((n): n is number => !!n));
+        const playerWithShirt = { ...player, shirtNumber: pickShirtNumber(player.position as Position, usedNumbers) };
         set({
-          rosters: { ...rosters, [managedTeamId]: [...players, player] },
+          rosters: { ...rosters, [managedTeamId]: [...players, playerWithShirt] },
           balance: balance - cost,
           transfersUsed: transfersUsed + 1,
           financeHistory: [...financeHistory, {
@@ -622,9 +803,12 @@ export const useGameStore = create<GameStore>()(
         const players = rosters[managedTeamId] ?? [];
         const player = players.find(p => p.id === playerId);
         if (!player) return;
-        const sellPrice = player.skill * 75_000;
+        const injuryFactor = player.injuredFor > 0 ? Math.max(0.3, 1 - player.injuredFor * 0.2) : 1;
+        const sellPrice = Math.round(player.skill * 75_000 * injuryFactor);
+        const { startingXI } = get();
         set({
           rosters: { ...rosters, [managedTeamId]: players.filter(p => p.id !== playerId) },
+          startingXI: (startingXI ?? []).filter(id => id !== playerId),
           balance: balance + sellPrice,
           transfersUsed: transfersUsed + 1,
           financeHistory: [...financeHistory, {
@@ -654,6 +838,24 @@ export const useGameStore = create<GameStore>()(
         });
       },
 
+      buyVipLounge: () => {
+        const { stadium, balance, financeHistory, currentMatchday } = get();
+        const nextLevel = stadium.vipLounge + 1;
+        if (nextLevel > 3 || nextLevel > stadium.seats) return;
+        const cost = VIP_LOUNGE_COSTS[nextLevel];
+        if (balance < cost) return;
+        set({
+          stadium: { ...stadium, vipLounge: nextLevel },
+          balance: balance - cost,
+          financeHistory: [...financeHistory, {
+            matchday: currentMatchday,
+            description: `VIP Lounge Level ${nextLevel}`,
+            amount: -cost,
+            running: balance - cost,
+          }],
+        });
+      },
+
       bribeReferee: () => {
         const { balance, financeHistory, currentMatchday } = get();
         const cost = 100_000;
@@ -674,7 +876,32 @@ export const useGameStore = create<GameStore>()(
       setPriceLevel: (priceLevel) => set({ priceLevel }),
       setFoodEnabled: (foodEnabled) => set({ foodEnabled }),
       setMerchandiseEnabled: (merchandiseEnabled) => set({ merchandiseEnabled }),
-      resetGame: () => set({ phase: 'menu', managerName: '', managedTeamId: 1 }),
+      resetGame: () => set({ phase: 'menu', managerName: '', managedTeamId: 1, sackReason: null }),
+      startNewSeason: () => {
+        const { managerName, managedTeamId, portrait, difficulty, table, division, seasonsInDivision } = get();
+        const pos = table.findIndex(r => r.teamId === managedTeamId) + 1;
+
+        let newDivision: 1 | 2 = division;
+        let newSeasonsInDivision = seasonsInDivision + 1;
+
+        if (division === 1 && pos >= 18) {
+          newDivision = 2;
+          newSeasonsInDivision = 1;
+        } else if (division === 2 && pos <= 3) {
+          newDivision = 1;
+          newSeasonsInDivision = 1;
+        }
+
+        if (newDivision === 2 && newSeasonsInDivision > 3) {
+          set({
+            phase: 'sacked',
+            sackReason: 'Three seasons in the First Division without promotion. The board has made a change.',
+          });
+          return;
+        }
+
+        get().startNewGame(managerName, managedTeamId, portrait, difficulty, newDivision, newSeasonsInDivision);
+      },
       setStaff: (role, tier) => {
         const { staff } = get();
         set({ staff: { ...staff, [role]: tier } });
@@ -706,7 +933,7 @@ export const useGameStore = create<GameStore>()(
     }),
     {
       name: 'ifog-game-state',
-      version: 2,
+      version: 5,
       migrate: (state: any) => {
         const total = (state.trainingMassage ?? 0) + (state.trainingSkills ?? 0) + (state.trainingShape ?? 0);
         if (total > 7) {
@@ -716,6 +943,12 @@ export const useGameStore = create<GameStore>()(
         }
         if (!Array.isArray(state.foodStock)) state.foodStock = Array(10).fill(800);
         if (!Array.isArray(state.shopStock)) state.shopStock = Array(10).fill(40);
+        if (typeof state.chairmanPortraitIdx !== 'number') state.chairmanPortraitIdx = 0;
+        if (typeof state.stadium?.vipLounge !== 'number') {
+          state.stadium = { ...(state.stadium ?? {}), vipLounge: 0 };
+        }
+        if (!state.division) state.division = 1;
+        if (!state.seasonsInDivision) state.seasonsInDivision = 1;
         return state;
       },
       storage: {

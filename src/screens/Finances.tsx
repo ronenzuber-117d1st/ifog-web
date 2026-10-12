@@ -68,7 +68,7 @@ function generateBorderOffers(matchday: number, teamId: number, activeNames: str
     // Amounts seeded by name + matchday (not position) so same company = same deal terms this matchday
     const nameSeed = name.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
     const r = lcg(matchday * 2673 + teamId * 13 + nameSeed);
-    return { name, amt: Math.round((r() * 55_000 + 15_000) / 5_000) * 5_000, len: Math.floor(r() * 5) + 4 };
+    return { name, amt: Math.round((r() * 8_000 + 3_000) / 500) * 500, len: Math.floor(r() * 7) + 4 };
   });
 }
 
@@ -81,7 +81,7 @@ const HIRE_NAMES: Record<string, string[]> = {
 
 function generateHirePlayers(matchday: number, teamId: number): Player[] {
   const rng = lcg(matchday * 9181 + teamId * 29);
-  const positions: Position[] = ['T', 'V', 'V', 'M', 'M', 'S'];
+  const positions: Position[] = ['T', 'T', 'V', 'V', 'V', 'V', 'M', 'M', 'M', 'M', 'S', 'S', 'S', 'S'];
   return positions.map((pos, i) => {
     const names = HIRE_NAMES[pos];
     const name = names[Math.floor(rng() * names.length)] + ' ' + String.fromCharCode(65 + Math.floor(rng() * 26)) + '.';
@@ -130,8 +130,11 @@ export function Finances() {
 
   const shirtOffers = useMemo(() => generateShirtOffers(currentMatchday, managedTeamId, sessionSeed), [currentMatchday, managedTeamId, sessionSeed]);
   const borderOffers = useMemo(() => generateBorderOffers(currentMatchday, managedTeamId, borderSponsors.map(s => s.name)), [currentMatchday, managedTeamId, borderSponsors]);
-  const hirePlayers = useMemo(() => generateHirePlayers(currentMatchday, managedTeamId), [currentMatchday, managedTeamId]);
   const myPlayers = rosters[managedTeamId] ?? [];
+  const hirePlayers = useMemo(() => {
+    const all = generateHirePlayers(currentMatchday, managedTeamId);
+    return all.filter(p => !myPlayers.some(mp => mp.id === p.id));
+  }, [currentMatchday, managedTeamId, myPlayers]);
   const transfersLeft = 3 - transfersUsed;
 
   return (
@@ -447,18 +450,39 @@ function BordersTab({ borderSponsors, borderOffers, offerIdx, onAccept, onForget
 }
 
 // ─── Transfer tab ─────────────────────────────────────────────────────────────
+type SortKey = 'name' | 'position' | 'skill' | 'age' | 'price';
+
 function TransferTab({ hirePlayers, myPlayers, balance, transfersLeft, onHire, onSell }: {
   hirePlayers: Player[]; myPlayers: Player[]; balance: number;
   transfersLeft: number; onHire: (p: Player) => void; onSell: (id: string) => void;
 }) {
   const [mode, setMode] = useState<'buy' | 'sell'>('buy');
-  const [done, setDone] = useState<Record<string, boolean>>({});
+  const [sortKey, setSortKey] = useState<SortKey>('position');
+  const [sortDir, setSortDir] = useState<1 | -1>(1);
 
   const hireCost = (p: Player) => p.skill * 75_000;
-  const sellPrice = (p: Player) => p.skill * 75_000;
+  const injuryFactor = (p: Player) => p.injuredFor > 0 ? Math.max(0.3, 1 - p.injuredFor * 0.2) : 1;
+  const sellPrice = (p: Player) => Math.round(p.skill * 75_000 * injuryFactor(p));
 
   const isBuy = mode === 'buy';
-  const rows = isBuy ? hirePlayers : myPlayers;
+
+  const cycleSort = (key: SortKey) => {
+    if (sortKey === key) setSortDir(d => (d === 1 ? -1 : 1));
+    else { setSortKey(key); setSortDir(key === 'name' || key === 'position' ? 1 : -1); }
+  };
+
+  const POS_RANK: Record<string, number> = { T: 0, V: 1, M: 2, S: 3 };
+  const sorted = [...(isBuy ? hirePlayers : myPlayers)].sort((a, b) => {
+    let cmp = 0;
+    if (sortKey === 'name')     cmp = a.name.localeCompare(b.name);
+    if (sortKey === 'position') cmp = (POS_RANK[a.position] ?? 0) - (POS_RANK[b.position] ?? 0);
+    if (sortKey === 'skill')    cmp = a.skill - b.skill;
+    if (sortKey === 'age')      cmp = a.age - b.age;
+    if (sortKey === 'price')    cmp = a.skill - b.skill;
+    return cmp * sortDir;
+  });
+
+  const rows = sorted;
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '280px minmax(0,1fr)', gap: 20, padding: '18px 28px 22px', boxSizing: 'border-box' }}>
@@ -471,7 +495,7 @@ function TransferTab({ hirePlayers, myPlayers, balance, transfersLeft, onHire, o
         ].map(m => (
           <button
             key={m.id}
-            onClick={() => { setMode(m.id); setDone({}); }}
+            onClick={() => setMode(m.id)}
             style={{ flex: 1, minHeight: 0, padding: 0, borderRadius: 16, overflow: 'hidden', border: `3px solid ${mode === m.id ? '#c8f53d' : '#1c2640'}`, background: '#000', opacity: mode === m.id ? 1 : 0.6, cursor: 'pointer', position: 'relative' }}
           >
             <img src={img(m.src)} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', imageRendering: 'pixelated', display: 'block' }} />
@@ -489,9 +513,9 @@ function TransferTab({ hirePlayers, myPlayers, balance, transfersLeft, onHire, o
         {/* Stats row */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0,1fr))', gap: 14, flexShrink: 0 }}>
           {[
-            { label: 'Transfers left this matchday', val: `${transfersLeft}/3`, valC: transfersLeft > 0 ? '#ffffff' : '#ff8a83', extra: (
+            { label: 'Transfers this matchday', val: `${3 - transfersLeft}/3`, valC: transfersLeft > 0 ? '#ffffff' : '#ff8a83', extra: (
               <div style={{ display: 'flex', gap: 4 }}>
-                {[0,1,2].map(k => <span key={k} style={{ width: 26, height: 8, borderRadius: 3, background: k < transfersLeft ? '#c8f53d' : '#1f2945', display: 'block' }} />)}
+                {[0,1,2].map(k => <span key={k} style={{ width: 26, height: 8, borderRadius: 3, background: k < (3 - transfersLeft) ? '#c8f53d' : '#1f2945', display: 'block' }} />)}
               </div>
             )},
             { label: 'Cash', val: money(balance), valC: '#c8f53d' },
@@ -519,26 +543,51 @@ function TransferTab({ hirePlayers, myPlayers, balance, transfersLeft, onHire, o
           </div>
 
           {/* Column headers */}
-          <div style={{ display: 'grid', gridTemplateColumns: '34px minmax(0,1fr) 60px 150px 60px 120px 110px', gap: 12, alignItems: 'center', height: 26, padding: '0 10px', fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', color: '#6b7797', borderBottom: '1px solid #1c2640', flexShrink: 0 }}>
-            <div /><div>Player</div><div>Pos</div><div>Skill</div><div style={{ textAlign: 'right' }}>Age</div><div style={{ textAlign: 'right' }}>{isBuy ? 'Price' : 'Offer'}</div><div />
-          </div>
+          {(() => {
+            const hdr = (key: SortKey, label: string, align: 'left' | 'right' = 'left') => {
+              const active = sortKey === key;
+              const arrow = active ? (sortDir === 1 ? ' ↑' : ' ↓') : '';
+              return (
+                <div onClick={() => cycleSort(key)} style={{ textAlign: align, cursor: 'pointer', color: active ? '#c8f53d' : '#6b7797', userSelect: 'none' }}>
+                  {label}{arrow}
+                </div>
+              );
+            };
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: '34px minmax(0,1fr) 60px 150px 60px 120px 110px', gap: 12, alignItems: 'center', height: 26, padding: '0 10px', fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', borderBottom: '1px solid #1c2640', flexShrink: 0 }}>
+                <div />
+                {hdr('name', 'Player')}
+                {hdr('position', 'Pos')}
+                {hdr('skill', 'Skill')}
+                {hdr('age', 'Age', 'right')}
+                {hdr('price', isBuy ? 'Price' : 'Offer', 'right')}
+                <div />
+              </div>
+            );
+          })()}
 
           {/* Rows */}
           <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
             {rows.map(p => {
               const pr = isBuy ? hireCost(p) : sellPrice(p);
-              const isDone = !!done[p.id];
-              const noTransfers = !isDone && transfersLeft <= 0;
-              const noMoney = !isDone && isBuy && pr > balance;
+              const noTransfers = transfersLeft <= 0;
+              const noMoney = isBuy && pr > balance;
               const blocked = noTransfers || noMoney;
               const why = noTransfers ? 'No transfers left' : noMoney ? 'Not enough cash' : '';
               const ini = p.name.slice(0, 1).toUpperCase();
               const posC = POS_COLOR[p.position] ?? '#8d99b5';
 
               return (
-                <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '34px minmax(0,1fr) 60px 150px 60px 120px 110px', gap: 12, alignItems: 'center', height: 42, padding: '0 10px', borderRadius: 8, background: isDone ? 'rgba(200,245,61,0.08)' : 'transparent', opacity: blocked ? 0.55 : 1 }}>
+                <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '34px minmax(0,1fr) 60px 150px 60px 120px 110px', gap: 12, alignItems: 'center', height: 42, padding: '0 10px', borderRadius: 8, background: 'transparent', opacity: blocked ? 0.55 : 1 }}>
                   <div style={{ width: 34, height: 30, borderRadius: 6, background: '#1a2440', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: posC, flexShrink: 0 }}>{ini}</div>
-                  <div style={{ fontWeight: 600, fontSize: 15, whiteSpace: 'nowrap', overflow: 'hidden' }}>{p.name}</div>
+                  <div style={{ fontWeight: 600, fontSize: 15, whiteSpace: 'nowrap', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {p.name}
+                    {!isBuy && p.injuredFor > 0 && (
+                      <span style={{ fontSize: 10, fontWeight: 700, background: '#7f1d1d', color: '#fca5a5', padding: '1px 5px', borderRadius: 4, flexShrink: 0 }}>
+                        INJ {p.injuredFor}gm
+                      </span>
+                    )}
+                  </div>
                   <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 12, color: posC }}>{POS_LABEL[p.position]}</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 20px', gap: 8, alignItems: 'center' }}>
                     <div style={{ height: 6, borderRadius: 3, background: '#1f2945', overflow: 'hidden' }}>
@@ -547,18 +596,13 @@ function TransferTab({ hirePlayers, myPlayers, balance, transfersLeft, onHire, o
                     <div style={{ textAlign: 'right', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 13 }}>{p.skill}</div>
                   </div>
                   <div style={{ textAlign: 'right', fontFamily: "'JetBrains Mono', monospace", fontSize: 13, color: '#c2cbe0' }}>{p.age}</div>
-                  <div style={{ textAlign: 'right', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 14, color: isBuy ? '#e8edf7' : '#5fd49a' }}>{money(pr)}</div>
+                  <div style={{ textAlign: 'right', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 14, color: isBuy ? '#e8edf7' : (p.injuredFor > 0 ? '#fb923c' : '#5fd49a') }}>{money(pr)}</div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                    {isDone ? (
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#c8f53d' }}>{isBuy ? 'Signed ✓' : 'Sold ✓'}</span>
-                    ) : blocked ? (
+                    {blocked ? (
                       <span style={{ fontSize: 12, color: '#6b7797' }}>{why}</span>
                     ) : (
                       <button
-                        onClick={() => {
-                          if (isBuy) onHire(p); else onSell(p.id);
-                          setDone(d => ({ ...d, [p.id]: true }));
-                        }}
+                        onClick={() => { if (isBuy) onHire(p); else onSell(p.id); }}
                         style={{ height: 34, padding: '0 16px', borderRadius: 8, border: 0, background: isBuy ? '#c8f53d' : '#f5c76b', color: '#070b16', fontWeight: 700, fontSize: 13, cursor: 'pointer' }}
                       >
                         {isBuy ? 'Buy' : 'Sell'}

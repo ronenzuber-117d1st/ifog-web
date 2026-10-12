@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useGameStore } from '../store/useGameStore';
 import { Layout } from '../components/Layout';
 import { img } from '../utils/images';
-import { LEAGUE_TEAMS } from '../data/teams';
+import { getTeamById } from '../data/teams';
 import { TICKET_PRICE_PRESETS, calcDemand, calcTicketSalesByDemand, calcFoodSales, calcMerchSales, calcTotalAttendance } from '../data/finances';
 
 type StadiumTab = 'stadium' | 'magazine' | 'tickets' | 'cheerleader' | 'fishchips' | 'fanshop' | 'viplounge' | 'radiotv';
@@ -78,10 +78,10 @@ const teamPortrait = (teamId: number) => TEAM_PORTRAITS[(teamId - 1) % TEAM_PORT
 
 export function Stadium() {
   const {
-    stadium, balance, upgradeStadium,
+    stadium, balance, upgradeStadium, buyVipLounge,
     staff, currentMatchday, fixtures, managedTeamId,
     mediaDeal, signMediaDeal, cancelMediaDeal, table, priceLevel,
-    foodStock, shopStock,
+    foodStock, shopStock, chairmanPortraitIdx,
   } = useGameStore();
 
   const [tab, setTab] = useState<StadiumTab>('stadium');
@@ -98,9 +98,9 @@ export function Stadium() {
   // Next fixture info (for Magazine)
   const nextFix   = fixtures.find(f => f.matchday === currentMatchday && (f.homeTeamId === managedTeamId || f.awayTeamId === managedTeamId) && f.homeGoals === undefined);
   const isHome    = nextFix?.homeTeamId === managedTeamId;
-  const myTeam    = LEAGUE_TEAMS.find(t => t.id === managedTeamId)!;
+  const myTeam    = getTeamById(managedTeamId)!;
   const oppTeamId = isHome ? nextFix?.awayTeamId : nextFix?.homeTeamId;
-  const oppTeam   = LEAGUE_TEAMS.find(t => t.id === oppTeamId);
+  const oppTeam   = getTeamById(oppTeamId);
   const mySkill   = (myTeam?.baseSkill ?? 55) + (isHome ? 3 : 0);
   const oppSkill  = (oppTeam?.baseSkill  ?? 55) + (!isHome ? 3 : 0);
   const total     = mySkill + oppSkill;
@@ -148,18 +148,18 @@ export function Stadium() {
           {tab === 'stadium' && (
             <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
               <div style={{ flex: 1, minHeight: 0, position: 'relative', overflow: 'hidden', background: '#001428' }}>
-                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '39.9%', display: 'flex' }}>
+                <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '41%', display: 'flex' }}>
                   <img src={img(`stli${lightsLevel}.png`)}  style={{ width: '29.5%',  height: '100%', objectFit: 'fill', imageRendering: 'pixelated', flexShrink: 0 }} alt="" />
                   <img src={img(`anzeig${facilLevel}.png`)} style={{ flex: 1,         height: '100%', objectFit: 'fill', imageRendering: 'pixelated' }} alt="" />
                   <img src={img(`stre${lightsLevel}.png`)}  style={{ width: '34.25%', height: '100%', objectFit: 'fill', imageRendering: 'pixelated', flexShrink: 0 }} alt="" />
                 </div>
                 {/* pillar-align: left: seatsLevel >= 2 ? '-2%' : 0, width: seatsLevel >= 2 ? '102%' : '100%' */}
                 <img src={img(`trib${seatsLevel}.png`)} style={{
-                  position: 'absolute', top: '39.9%', left: 0, width: '100%', height: '21.1%',
+                  position: 'absolute', top: '41%', left: 0, width: '100%', height: '23%',
                   objectFit: 'fill', imageRendering: 'pixelated',
                 }} alt="" />
                 <img src={img(`felda${pitchLevel}.png`)} style={{
-                  position: 'absolute', bottom: 0, left: 0, width: '100%', height: '39%',
+                  position: 'absolute', bottom: 0, left: 0, width: '100%', height: '36%',
                   objectFit: 'fill', imageRendering: 'pixelated',
                 }} alt="" />
 
@@ -171,10 +171,10 @@ export function Stadium() {
                   onUpgrade={() => upgradeStadium('facilities')}     style={{ top: '5%', left: '50%', transform: 'translateX(-50%)' }} />
                 <UpgradeChip label="Seats"      current={seatsLevel}  cost={UPGRADE_COSTS.seats[seatsLevel]}
                   desc={UPGRADE_LABELS.seats[seatsLevel - 1]}        canAfford={balance >= UPGRADE_COSTS.seats[seatsLevel]}
-                  onUpgrade={() => upgradeStadium('seats')}          style={{ top: '47%', left: '50%', transform: 'translateX(-50%)' }} />
+                  onUpgrade={() => upgradeStadium('seats')}          style={{ top: '50%', left: '50%', transform: 'translateX(-50%)' }} />
                 <UpgradeChip label="Pitch"      current={pitchLevel}  cost={UPGRADE_COSTS.pitch[pitchLevel]}
                   desc={UPGRADE_LABELS.pitch[pitchLevel - 1]}        canAfford={balance >= UPGRADE_COSTS.pitch[pitchLevel]}
-                  onUpgrade={() => upgradeStadium('pitch')}          style={{ top: '68%', left: '5%' }} />
+                  onUpgrade={() => upgradeStadium('pitch')}          style={{ top: '72%', left: '5%' }} />
               </div>
               <div style={{ flexShrink: 0, background: '#0a0f1d', borderTop: '1px solid #1c2640', padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '12px' }}>
                 <div style={{ display: 'flex', gap: '20px' }}>
@@ -220,7 +220,7 @@ export function Stadium() {
 
                   {/* The President — opponent team's manager */}
                   <div style={{ flex: 1, textAlign: 'center', padding: '0 14px', borderRight: '1px solid #ccc', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
-                    <img src={img(`${teamPortrait(oppTeamId ?? managedTeamId)}.png`)} alt="" style={{ width: '130px', imageRendering: 'pixelated' }} />
+                    <img src={img(`${TEAM_PORTRAITS[chairmanPortraitIdx]}.png`)} alt="" style={{ width: '130px', imageRendering: 'pixelated' }} />
                     <div style={{ fontSize: '22px', fontWeight: 'bold', fontFamily: 'Georgia, serif' }}>The President</div>
                     <div style={{ fontSize: '18px', fontStyle: 'italic', lineHeight: '1.6' }}>
                       {myShare >= oppShare ? "Nobody beats our Manager!" : "We must do better!"}
@@ -275,13 +275,12 @@ export function Stadium() {
 
           {/* ═══ CHEERLEADER ═══ */}
           {tab === 'cheerleader' && (
-            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#111' }}>
+            <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#111', padding: '16px', boxSizing: 'border-box' }}>
               {staff.cheerleader > 0 ? (
                 <img src={img(`cheer${staff.cheerleader}.png`)} alt="Cheerleader"
                   style={{ maxHeight: '100%', maxWidth: '100%', objectFit: 'contain', imageRendering: 'pixelated' }} />
               ) : (
                 <div style={{ color: '#64748b', textAlign: 'center' }}>
-                  <div style={{ fontSize: '36px', marginBottom: '10px' }}>💃</div>
                   <div style={{ fontSize: '14px' }}>No cheerleader hired</div>
                   <div style={{ fontSize: '11px', color: '#374151', marginTop: '6px' }}>Hire from Desk → Personnel → Cheerleader</div>
                 </div>
@@ -300,44 +299,86 @@ export function Stadium() {
                 <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: '10px 14px', background: '#f0f0f0', color: '#000', fontFamily: 'monospace', fontSize: '15px' }}>
                   {staff.fishChips > 0 ? (<>
                     {/* Purchase bar */}
-                    <div style={{ flexShrink: 0, display: 'flex', gap: '10px', alignItems: 'flex-end', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid #ccc' }}>
-                      <div>
-                        <div style={{ fontSize: '12px', marginBottom: '2px' }}>Item</div>
-                        <select value={fishItem} onChange={e => setFishItem(Number(e.target.value))}
-                          style={{ fontSize: '14px', border: '1px solid #888', padding: '3px 4px' }}>
-                          {FISH_ITEMS.map((item, i) => <option key={i} value={i}>{item.name}</option>)}
-                        </select>
+                    <div style={{ flexShrink: 0, marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid #ccc' }}>
+                      {/* Per-item row */}
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', marginBottom: '6px' }}>
+                        <div>
+                          <div style={{ fontSize: '12px', marginBottom: '2px' }}>Item</div>
+                          <select value={fishItem} onChange={e => setFishItem(Number(e.target.value))}
+                            style={{ fontSize: '14px', border: '1px solid #888', padding: '3px 4px' }}>
+                            {FISH_ITEMS.map((item, i) => <option key={i} value={i}>{item.name}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '12px', marginBottom: '2px' }}>Qty</div>
+                          <input type="number" min={1} value={fishQty}
+                            onChange={e => setFishQty(e.target.value === '' ? '' : Math.max(1, Number(e.target.value)))}
+                            onFocus={e => e.target.select()}
+                            style={{ width: '55px', border: '1px solid #888', padding: '3px 4px', fontSize: '14px' }} />
+                        </div>
+                        <div style={{ fontSize: '14px', paddingBottom: '3px' }}>
+                          Cost: <strong>£{(FISH_ITEMS[fishItem].price * (fishQty || 0)).toFixed(2)}</strong>
+                        </div>
+                        <button
+                          disabled={!fishQty || balance < FISH_ITEMS[fishItem].price * fishQty}
+                          onClick={() => {
+                            const cost = FISH_ITEMS[fishItem].price * (fishQty || 0);
+                            if (!fishQty || balance < cost) return;
+                            useGameStore.setState(s => ({
+                              balance: s.balance - cost,
+                              foodStock: s.foodStock.map((n, i) => i === fishItem ? n + (fishQty as number) : n),
+                              financeHistory: [...s.financeHistory, {
+                                matchday: currentMatchday,
+                                description: `Fish&Chips: ${FISH_ITEMS[fishItem].name} ×${fishQty}`,
+                                amount: -cost,
+                                running: s.balance - cost,
+                              }],
+                            }));
+                            setFishQty('');
+                          }}
+                          style={{ padding: '4px 10px', border: '1px solid #888', fontSize: '14px', cursor: balance >= FISH_ITEMS[fishItem].price * fishQty ? 'pointer' : 'default', background: balance >= FISH_ITEMS[fishItem].price * fishQty ? '#ddd' : '#c8c8c8' }}>
+                          BUY &gt;&gt;
+                        </button>
                       </div>
-                      <div>
-                        <div style={{ fontSize: '12px', marginBottom: '2px' }}>Qty</div>
-                        <input type="number" min={1} value={fishQty}
-                          onChange={e => setFishQty(e.target.value === '' ? '' : Math.max(1, Number(e.target.value)))}
-                          onFocus={e => e.target.select()}
-                          style={{ width: '55px', border: '1px solid #888', padding: '3px 4px', fontSize: '14px' }} />
-                      </div>
-                      <div style={{ fontSize: '14px', paddingBottom: '3px' }}>
-                        Cost: <strong>£{(FISH_ITEMS[fishItem].price * (fishQty || 0)).toFixed(2)}</strong>
-                      </div>
-                      <button
-                        disabled={!fishQty || balance < FISH_ITEMS[fishItem].price * fishQty}
-                        onClick={() => {
-                          const cost = FISH_ITEMS[fishItem].price * (fishQty || 0);
-                          if (!fishQty || balance < cost) return;
-                          useGameStore.setState(s => ({
-                            balance: s.balance - cost,
-                            foodStock: s.foodStock.map((n, i) => i === fishItem ? n + (fishQty as number) : n),
-                            financeHistory: [...s.financeHistory, {
-                              matchday: currentMatchday,
-                              description: `Fish&Chips: ${FISH_ITEMS[fishItem].name} ×${fishQty}`,
-                              amount: -cost,
-                              running: s.balance - cost,
-                            }],
-                          }));
-                          setFishQty('');
-                        }}
-                        style={{ padding: '4px 10px', border: '1px solid #888', fontSize: '14px', cursor: balance >= FISH_ITEMS[fishItem].price * fishQty ? 'pointer' : 'default', background: balance >= FISH_ITEMS[fishItem].price * fishQty ? '#ddd' : '#c8c8c8' }}>
-                        BUY &gt;&gt;
-                      </button>
+                      {/* Fill-to-demand row */}
+                      {(() => {
+                        const demand = calcFoodSales(attendance, staff.fishChips).unitsSold;
+                        const shortfall = demand.map((qty, i) => Math.max(0, qty - foodStock[i]));
+                        const restockCost = shortfall.reduce((sum, qty, i) => sum + qty * FISH_ITEMS[i].price, 0);
+                        const canAfford = balance >= restockCost;
+                        const nothingNeeded = restockCost === 0;
+                        return (
+                          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                            <span style={{ fontSize: '13px', color: '#555' }}>Fill to match demand:</span>
+                            <span style={{ fontSize: '13px' }}>
+                              Cost: <strong>£{restockCost.toLocaleString()}</strong>
+                            </span>
+                            <button
+                              disabled={nothingNeeded || !canAfford}
+                              onClick={() => {
+                                useGameStore.setState(s => {
+                                  const d = calcFoodSales(attendance, staff.fishChips).unitsSold;
+                                  const sf = d.map((qty, i) => Math.max(0, qty - s.foodStock[i]));
+                                  const cost = sf.reduce((sum, qty, i) => sum + qty * FISH_ITEMS[i].price, 0);
+                                  if (cost <= 0 || s.balance < cost) return s;
+                                  return {
+                                    balance: s.balance - cost,
+                                    foodStock: s.foodStock.map((qty, i) => qty + sf[i]),
+                                    financeHistory: [...s.financeHistory, {
+                                      matchday: currentMatchday,
+                                      description: 'Fish&Chips: Restock all',
+                                      amount: -cost,
+                                      running: s.balance - cost,
+                                    }],
+                                  };
+                                });
+                              }}
+                              style={{ padding: '4px 10px', border: '1px solid #888', fontSize: '14px', cursor: (!nothingNeeded && canAfford) ? 'pointer' : 'default', background: nothingNeeded ? '#e8e8e8' : canAfford ? '#ddd' : '#c8c8c8', color: nothingNeeded ? '#999' : '#000' }}>
+                              {nothingNeeded ? 'Fully stocked' : 'RESTOCK ALL >>'}
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Table — only this part scrolls */}
@@ -368,11 +409,13 @@ export function Stadium() {
                     {(() => {
                       const TIER_COSTS = [0, 250, 750, 1500];
                       const fs = calcFoodSales(attendance, staff.fishChips);
+                      const actualSold = fs.unitsSold.map((qty, i) => Math.min(qty, foodStock[i] ?? 0));
+                      const revenue = actualSold.reduce((sum, qty, i) => sum + qty * FISH_ITEMS[i].price, 0);
                       const staffCost = TIER_COSTS[staff.fishChips];
                       return (
                         <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', gap: '12px', alignItems: 'baseline', borderTop: '1px solid #aaa', paddingTop: '6px', marginTop: '6px' }}>
-                          <span style={{ fontSize: '14px' }}>Est. sales £{fs.revenue.toLocaleString()} − staff £{staffCost.toLocaleString()} =</span>
-                          <span style={{ fontWeight: 'bold', fontSize: '20px' }}>£{(fs.revenue - staffCost).toLocaleString()}/match</span>
+                          <span style={{ fontSize: '14px' }}>Est. sales £{revenue.toLocaleString()} − staff £{staffCost.toLocaleString()} =</span>
+                          <span style={{ fontWeight: 'bold', fontSize: '20px' }}>£{(revenue - staffCost).toLocaleString()}/match</span>
                         </div>
                       );
                     })()}
@@ -398,44 +441,86 @@ export function Stadium() {
                 <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column', padding: '10px 14px', background: '#f0f0f0', color: '#000', fontFamily: 'monospace', fontSize: '15px' }}>
                   {staff.fanShop > 0 ? (<>
                     {/* Purchase bar */}
-                    <div style={{ flexShrink: 0, display: 'flex', gap: '10px', alignItems: 'flex-end', marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid #ccc' }}>
-                      <div>
-                        <div style={{ fontSize: '12px', marginBottom: '2px' }}>Item</div>
-                        <select value={shopItem} onChange={e => setShopItem(Number(e.target.value))}
-                          style={{ fontSize: '14px', border: '1px solid #888', padding: '3px 4px' }}>
-                          {SHOP_ITEMS.map((item, i) => <option key={i} value={i}>{item.name}</option>)}
-                        </select>
+                    <div style={{ flexShrink: 0, marginBottom: '8px', paddingBottom: '8px', borderBottom: '1px solid #ccc' }}>
+                      {/* Per-item row */}
+                      <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-end', marginBottom: '6px' }}>
+                        <div>
+                          <div style={{ fontSize: '12px', marginBottom: '2px' }}>Item</div>
+                          <select value={shopItem} onChange={e => setShopItem(Number(e.target.value))}
+                            style={{ fontSize: '14px', border: '1px solid #888', padding: '3px 4px' }}>
+                            {SHOP_ITEMS.map((item, i) => <option key={i} value={i}>{item.name}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: '12px', marginBottom: '2px' }}>Qty</div>
+                          <input type="number" min={1} value={shopQty}
+                            onChange={e => setShopQty(e.target.value === '' ? '' : Math.max(1, Number(e.target.value)))}
+                            onFocus={e => e.target.select()}
+                            style={{ width: '55px', border: '1px solid #888', padding: '3px 4px', fontSize: '14px' }} />
+                        </div>
+                        <div style={{ fontSize: '14px', paddingBottom: '3px' }}>
+                          Cost: <strong>£{(SHOP_ITEMS[shopItem].price * (shopQty || 0)).toFixed(2)}</strong>
+                        </div>
+                        <button
+                          disabled={!shopQty || balance < SHOP_ITEMS[shopItem].price * (shopQty || 0)}
+                          onClick={() => {
+                            const cost = SHOP_ITEMS[shopItem].price * (shopQty || 0);
+                            if (!shopQty || balance < cost) return;
+                            useGameStore.setState(s => ({
+                              balance: s.balance - cost,
+                              shopStock: s.shopStock.map((n, i) => i === shopItem ? n + (shopQty as number) : n),
+                              financeHistory: [...s.financeHistory, {
+                                matchday: currentMatchday,
+                                description: `Fan Shop: ${SHOP_ITEMS[shopItem].name} ×${shopQty}`,
+                                amount: -cost,
+                                running: s.balance - cost,
+                              }],
+                            }));
+                            setShopQty('');
+                          }}
+                          style={{ padding: '4px 10px', border: '1px solid #888', fontSize: '14px', cursor: shopQty && balance >= SHOP_ITEMS[shopItem].price * (shopQty || 0) ? 'pointer' : 'default', background: shopQty && balance >= SHOP_ITEMS[shopItem].price * (shopQty || 0) ? '#ddd' : '#c8c8c8' }}>
+                          BUY &gt;&gt;
+                        </button>
                       </div>
-                      <div>
-                        <div style={{ fontSize: '12px', marginBottom: '2px' }}>Qty</div>
-                        <input type="number" min={1} value={shopQty}
-                          onChange={e => setShopQty(e.target.value === '' ? '' : Math.max(1, Number(e.target.value)))}
-                          onFocus={e => e.target.select()}
-                          style={{ width: '55px', border: '1px solid #888', padding: '3px 4px', fontSize: '14px' }} />
-                      </div>
-                      <div style={{ fontSize: '14px', paddingBottom: '3px' }}>
-                        Cost: <strong>£{(SHOP_ITEMS[shopItem].price * (shopQty || 0)).toFixed(2)}</strong>
-                      </div>
-                      <button
-                        disabled={!shopQty || balance < SHOP_ITEMS[shopItem].price * (shopQty || 0)}
-                        onClick={() => {
-                          const cost = SHOP_ITEMS[shopItem].price * (shopQty || 0);
-                          if (!shopQty || balance < cost) return;
-                          useGameStore.setState(s => ({
-                            balance: s.balance - cost,
-                            shopStock: s.shopStock.map((n, i) => i === shopItem ? n + (shopQty as number) : n),
-                            financeHistory: [...s.financeHistory, {
-                              matchday: currentMatchday,
-                              description: `Fan Shop: ${SHOP_ITEMS[shopItem].name} ×${shopQty}`,
-                              amount: -cost,
-                              running: s.balance - cost,
-                            }],
-                          }));
-                          setShopQty('');
-                        }}
-                        style={{ padding: '4px 10px', border: '1px solid #888', fontSize: '14px', cursor: shopQty && balance >= SHOP_ITEMS[shopItem].price * (shopQty || 0) ? 'pointer' : 'default', background: shopQty && balance >= SHOP_ITEMS[shopItem].price * (shopQty || 0) ? '#ddd' : '#c8c8c8' }}>
-                        BUY &gt;&gt;
-                      </button>
+                      {/* Fill-to-demand row */}
+                      {(() => {
+                        const demand = calcMerchSales(attendance, staff.fanShop).unitsSold;
+                        const shortfall = demand.map((qty, i) => Math.max(0, qty - shopStock[i]));
+                        const restockCost = shortfall.reduce((sum, qty, i) => sum + qty * SHOP_ITEMS[i].price, 0);
+                        const canAfford = balance >= restockCost;
+                        const nothingNeeded = restockCost === 0;
+                        return (
+                          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+                            <span style={{ fontSize: '13px', color: '#555' }}>Fill to match demand:</span>
+                            <span style={{ fontSize: '13px' }}>
+                              Cost: <strong>£{restockCost.toLocaleString()}</strong>
+                            </span>
+                            <button
+                              disabled={nothingNeeded || !canAfford}
+                              onClick={() => {
+                                useGameStore.setState(s => {
+                                  const d = calcMerchSales(attendance, staff.fanShop).unitsSold;
+                                  const sf = d.map((qty, i) => Math.max(0, qty - s.shopStock[i]));
+                                  const cost = sf.reduce((sum, qty, i) => sum + qty * SHOP_ITEMS[i].price, 0);
+                                  if (cost <= 0 || s.balance < cost) return s;
+                                  return {
+                                    balance: s.balance - cost,
+                                    shopStock: s.shopStock.map((qty, i) => qty + sf[i]),
+                                    financeHistory: [...s.financeHistory, {
+                                      matchday: currentMatchday,
+                                      description: 'Fan Shop: Restock all',
+                                      amount: -cost,
+                                      running: s.balance - cost,
+                                    }],
+                                  };
+                                });
+                              }}
+                              style={{ padding: '4px 10px', border: '1px solid #888', fontSize: '14px', cursor: (!nothingNeeded && canAfford) ? 'pointer' : 'default', background: nothingNeeded ? '#e8e8e8' : canAfford ? '#ddd' : '#c8c8c8', color: nothingNeeded ? '#999' : '#000' }}>
+                              {nothingNeeded ? 'Fully stocked' : 'RESTOCK ALL >>'}
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Table — only rows scroll */}
@@ -466,11 +551,13 @@ export function Stadium() {
                     {(() => {
                       const TIER_COSTS = [0, 250, 750, 1500];
                       const ms = calcMerchSales(attendance, staff.fanShop);
+                      const actualSold = ms.unitsSold.map((qty, i) => Math.min(qty, shopStock[i] ?? 0));
+                      const revenue = actualSold.reduce((sum, qty, i) => sum + qty * SHOP_ITEMS[i].price, 0);
                       const staffCost = TIER_COSTS[staff.fanShop];
                       return (
                         <div style={{ flexShrink: 0, display: 'flex', justifyContent: 'flex-end', gap: '12px', alignItems: 'baseline', borderTop: '1px solid #aaa', paddingTop: '6px', marginTop: '6px' }}>
-                          <span style={{ fontSize: '14px' }}>Est. sales £{ms.revenue.toLocaleString()} − staff £{staffCost.toLocaleString()} =</span>
-                          <span style={{ fontWeight: 'bold', fontSize: '20px' }}>£{(ms.revenue - staffCost).toLocaleString()}/match</span>
+                          <span style={{ fontSize: '14px' }}>Est. sales £{revenue.toLocaleString()} − staff £{staffCost.toLocaleString()} =</span>
+                          <span style={{ fontWeight: 'bold', fontSize: '20px' }}>£{(revenue - staffCost).toLocaleString()}/match</span>
                         </div>
                       );
                     })()}
@@ -486,58 +573,133 @@ export function Stadium() {
           )}
 
           {/* ═══ VIP LOUNGE ═══ */}
-          {tab === 'viplounge' && (
-            <div style={{ height: '100%', overflow: 'hidden', padding: '16px', background: '#2a2a2a', display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box' }}>
-              <div style={{ background: '#fff8f0', borderRadius: '2px', padding: '28px 36px', width: '900px', flexShrink: 0, color: '#000', fontFamily: 'serif', boxShadow: '6px 6px 20px rgba(0,0,0,0.6)' }}>
-                {/* Header */}
-                <div style={{ textAlign: 'center', marginBottom: '20px', borderBottom: '2px solid #8b6914', paddingBottom: '12px' }}>
-                  <div style={{ fontSize: '14px', letterSpacing: '4px', color: '#8b6914', textTransform: 'uppercase', marginBottom: '6px' }}>Exclusive</div>
-                  <div style={{ fontSize: '36px', fontWeight: 'bold', letterSpacing: '3px' }}>VIP LOUNGE</div>
-                </div>
-                {/* Image */}
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
-                  <img src={img(`vip${seatsLevel}.png`)} alt="VIP Lounge"
-                    style={{ maxWidth: '100%', imageRendering: 'pixelated', display: 'block' }} />
-                </div>
-                {/* Info columns */}
-                <div style={{ display: 'flex', borderTop: '1px solid #c8a84b', paddingTop: '20px', gap: '0' }}>
-                  <div style={{ flex: 1, textAlign: 'center', borderRight: '1px solid #c8a84b', paddingRight: '20px' }}>
-                    <div style={{ fontSize: '16px', color: '#8b6914', letterSpacing: '1px', marginBottom: '8px' }}>LOUNGE LEVEL</div>
-                    <div style={{ fontSize: '28px', fontWeight: 'bold' }}>{'★'.repeat(seatsLevel)}{'☆'.repeat(3 - seatsLevel)}</div>
-                    <div style={{ fontSize: '18px', color: '#555', marginTop: '6px' }}>
-                      {seatsLevel === 1 ? 'Standard Suite' : seatsLevel === 2 ? 'Premium Suite' : 'Platinum Suite'}
+          {tab === 'viplounge' && (() => {
+            const vipLevel = stadium.vipLounge;
+            const VIP_COSTS = [0, 150_000, 350_000, 700_000];
+            const VIP_NAMES = ['', 'Standard Suite', 'Premium Suite', 'Platinum Suite'];
+            const nextLevel = vipLevel + 1;
+            const canUpgrade = nextLevel <= 3 && nextLevel <= seatsLevel;
+            const upgradeCost = nextLevel <= 3 ? VIP_COSTS[nextLevel] : 0;
+            const canAffordUpgrade = balance >= upgradeCost;
+            const needsSeats = nextLevel <= 3 && nextLevel > seatsLevel;
+            const vipSeats = ticketSales[7];
+            const vipPrice = TICKET_PRICE_PRESETS[priceLevel][7];
+            const vipRevenue = vipSeats * vipPrice;
+            return (
+              <div style={{ height: '100%', overflow: 'hidden', padding: '16px', background: '#2a1a00', display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box' }}>
+                <div style={{ width: '900px', height: '100%', display: 'flex', flexDirection: 'column', background: '#fff8f0', color: '#000', fontFamily: 'serif', boxShadow: '6px 6px 20px rgba(0,0,0,0.6)', overflow: 'hidden' }}>
+                  {/* Header */}
+                  <div style={{ flexShrink: 0, textAlign: 'center', padding: '10px 28px 8px', borderBottom: '2px solid #8b6914' }}>
+                    <div style={{ fontSize: '10px', letterSpacing: '4px', color: '#8b6914', textTransform: 'uppercase', marginBottom: '2px' }}>Exclusive</div>
+                    <div style={{ fontSize: '24px', fontWeight: 'bold', letterSpacing: '3px' }}>VIP LOUNGE</div>
+                  </div>
+                  {/* Image */}
+                  <div style={{ flex: '0 0 45%', overflow: 'hidden', background: '#1a0800', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                    <img src={img(`vip${Math.max(1, vipLevel)}.png`)} alt="VIP Lounge"
+                      style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', imageRendering: 'pixelated', filter: vipLevel === 0 ? 'grayscale(1) brightness(0.35)' : 'none' }} />
+                    {vipLevel === 0 && (
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <div style={{ textAlign: 'center', color: '#c8a84b' }}>
+                          <div style={{ fontSize: '48px', lineHeight: 1 }}>🔒</div>
+                          <div style={{ fontSize: '14px', fontWeight: 'bold', letterSpacing: '3px', textTransform: 'uppercase', marginTop: '8px', fontFamily: 'sans-serif' }}>Not Built</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {/* Info columns */}
+                  <div style={{ flex: 1, display: 'flex', padding: '0 20px', borderTop: '1px solid #c8a84b', alignItems: 'center' }}>
+                    {/* Column 1: Level */}
+                    <div style={{ flex: 1, textAlign: 'center', borderRight: '1px solid #c8a84b', paddingRight: '20px' }}>
+                      <div style={{ fontSize: '13px', color: '#8b6914', letterSpacing: '1px', marginBottom: '6px' }}>LOUNGE LEVEL</div>
+                      <div style={{ fontSize: '26px', fontWeight: 'bold' }}>{'★'.repeat(vipLevel)}{'☆'.repeat(3 - vipLevel)}</div>
+                      <div style={{ fontSize: '15px', color: vipLevel > 0 ? '#555' : '#aaa', marginTop: '4px' }}>
+                        {vipLevel > 0 ? VIP_NAMES[vipLevel] : 'Not Built'}
+                      </div>
+                    </div>
+                    {/* Column 2: Revenue */}
+                    <div style={{ flex: 1, textAlign: 'center', borderRight: '1px solid #c8a84b', padding: '0 20px' }}>
+                      <div style={{ fontSize: '13px', color: '#8b6914', letterSpacing: '1px', marginBottom: '6px' }}>VIP SEATS</div>
+                      {vipLevel > 0 ? (<>
+                        <div style={{ fontSize: '32px', fontWeight: 'bold', fontFamily: 'monospace' }}>{vipSeats}</div>
+                        <div style={{ fontSize: '15px', color: '#555', marginTop: '4px' }}>£{vipPrice.toLocaleString()} / ticket</div>
+                      </>) : (<>
+                        <div style={{ fontSize: '24px', fontWeight: 'bold', fontFamily: 'monospace', color: '#bbb' }}>—</div>
+                        <div style={{ fontSize: '13px', color: '#aaa', marginTop: '4px' }}>build to unlock</div>
+                      </>)}
+                    </div>
+                    {/* Column 3: Revenue / Upgrade */}
+                    <div style={{ flex: 1, textAlign: 'center', paddingLeft: '20px' }}>
+                      {vipLevel > 0 && vipLevel < 3 ? (<>
+                        <div style={{ fontSize: '13px', color: '#8b6914', letterSpacing: '1px', marginBottom: '6px' }}>REVENUE / MATCH</div>
+                        <div style={{ fontSize: '28px', fontWeight: 'bold', fontFamily: 'monospace' }}>£{vipRevenue.toLocaleString()}</div>
+                        <div style={{ fontSize: '13px', color: '#555', marginTop: '4px' }}>home matches only</div>
+                      </>) : vipLevel === 3 ? (<>
+                        <div style={{ fontSize: '13px', color: '#8b6914', letterSpacing: '1px', marginBottom: '6px' }}>REVENUE / MATCH</div>
+                        <div style={{ fontSize: '28px', fontWeight: 'bold', fontFamily: 'monospace' }}>£{vipRevenue.toLocaleString()}</div>
+                        <div style={{ fontSize: '13px', color: '#555', marginTop: '4px' }}>home matches only</div>
+                      </>) : null}
+                      {vipLevel === 0 && (
+                        <div style={{ fontSize: '13px', color: '#8b6914', letterSpacing: '1px', marginBottom: '6px' }}>REVENUE / MATCH</div>
+                      )}
+                      {vipLevel === 0 && (
+                        <div style={{ fontSize: '24px', fontWeight: 'bold', fontFamily: 'monospace', color: '#bbb' }}>—</div>
+                      )}
                     </div>
                   </div>
-                  {(() => {
-                    const vipSeats = ticketSales[7];
-                    const vipPrice = TICKET_PRICE_PRESETS[priceLevel][7];
-                    const vipRevenue = vipSeats * vipPrice;
-                    return (<>
-                      <div style={{ flex: 1, textAlign: 'center', borderRight: '1px solid #c8a84b', padding: '0 20px' }}>
-                        <div style={{ fontSize: '16px', color: '#8b6914', letterSpacing: '1px', marginBottom: '8px' }}>VIP SEATS</div>
-                        <div style={{ fontSize: '36px', fontWeight: 'bold', fontFamily: 'monospace' }}>{vipSeats}</div>
-                        <div style={{ fontSize: '18px', color: '#555', marginTop: '6px' }}>£{vipPrice.toLocaleString()} / ticket</div>
-                      </div>
-                      <div style={{ flex: 1, textAlign: 'center', paddingLeft: '20px' }}>
-                        <div style={{ fontSize: '16px', color: '#8b6914', letterSpacing: '1px', marginBottom: '8px' }}>REVENUE / MATCH</div>
-                        <div style={{ fontSize: '36px', fontWeight: 'bold', fontFamily: 'monospace' }}>£{vipRevenue.toLocaleString()}</div>
-                        <div style={{ fontSize: '18px', color: '#555', marginTop: '6px' }}>home matches only</div>
-                      </div>
-                    </>);
-                  })()}
+                  {/* Upgrade footer */}
+                  <div style={{ flexShrink: 0, borderTop: '1px solid #c8a84b', padding: '12px 24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#fdf3dc' }}>
+                    <div>
+                      {vipLevel < 3 ? (<>
+                        <div style={{ fontSize: '11px', color: '#8b6914', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '2px' }}>
+                          {vipLevel === 0 ? 'Build VIP Lounge' : `Upgrade to ${VIP_NAMES[nextLevel]}`}
+                        </div>
+                        <div style={{ fontSize: '13px', color: needsSeats ? '#999' : '#555' }}>
+                          {needsSeats
+                            ? `Requires Seats Level ${nextLevel} — upgrade your stadium first`
+                            : `Cost: £${upgradeCost.toLocaleString()}`}
+                        </div>
+                      </>) : (
+                        <div>
+                          <div style={{ fontSize: '11px', color: '#8b6914', letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '2px' }}>Platinum Suite</div>
+                          <div style={{ fontSize: '13px', color: '#555' }}>Maximum level reached</div>
+                        </div>
+                      )}
+                    </div>
+                    {vipLevel < 3 && (
+                      <button
+                        disabled={!canUpgrade || !canAffordUpgrade}
+                        onClick={buyVipLounge}
+                        style={{
+                          padding: '8px 24px', fontSize: '14px', fontWeight: 'bold', fontFamily: 'sans-serif',
+                          letterSpacing: '1px', textTransform: 'uppercase',
+                          background: canUpgrade && canAffordUpgrade ? '#8b6914' : '#ccc',
+                          color: canUpgrade && canAffordUpgrade ? '#fff8f0' : '#888',
+                          border: 'none', cursor: canUpgrade && canAffordUpgrade ? 'pointer' : 'default',
+                          borderRadius: '4px',
+                        }}
+                      >
+                        {needsSeats ? '🔒 Locked' : canAffordUpgrade ? `▶ Build` : 'Insufficient funds'}
+                      </button>
+                    )}
+                    {vipLevel === 3 && (
+                      <div style={{ fontSize: '22px', color: '#8b6914', fontWeight: 'bold' }}>★★★ MAX ✓</div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* ═══ RADIO AND TV ═══ */}
           {tab === 'radiotv' && (() => {
+            const myRow = table.find(r => r.teamId === managedTeamId);
             const pos = table.findIndex(r => r.teamId === managedTeamId) + 1 || 20;
+            const played = myRow?.played ?? 0;
             const MEDIA_DEALS = [
-              { name: 'Local Radio',       revenuePerMatch: 20_000,  matchdays: 5,  maxPos: 20, desc: 'Community coverage' },
-              { name: 'National Radio',    revenuePerMatch: 45_000,  matchdays: 7,  maxPos: 15, desc: 'Top 15 only' },
-              { name: 'TV Package',        revenuePerMatch: 75_000,  matchdays: 8,  maxPos: 10, desc: 'Top 10 only' },
-              { name: 'Premium Broadcast', revenuePerMatch: 120_000, matchdays: 10, maxPos: 5,  desc: 'Top 5 only' },
+              { name: 'Local Radio',       revenuePerMatch: 20_000,  matchdays: 5,  maxPos: 20, minPlayed: 3,  desc: 'Community coverage' },
+              { name: 'National Radio',    revenuePerMatch: 45_000,  matchdays: 7,  maxPos: 15, minPlayed: 8,  desc: 'Top 15 only' },
+              { name: 'TV Package',        revenuePerMatch: 75_000,  matchdays: 8,  maxPos: 10, minPlayed: 15, desc: 'Top 10 only' },
+              { name: 'Premium Broadcast', revenuePerMatch: 120_000, matchdays: 10, maxPos: 5,  minPlayed: 20, desc: 'Top 5 only' },
             ];
             return (
               <div style={{ height: '100%', overflow: 'hidden', background: '#1a1a2e', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px', boxSizing: 'border-box' }}>
@@ -586,7 +748,12 @@ export function Stadium() {
                         </div>
                         <div style={{ display: 'flex', gap: '8px' }}>
                           {MEDIA_DEALS.map(deal => {
-                            const available = pos <= deal.maxPos;
+                            const posOk    = pos <= deal.maxPos;
+                            const playedOk = played >= deal.minPlayed;
+                            const available = posOk && playedOk;
+                            const btnLabel = available ? 'SIGN DEAL'
+                              : !playedOk ? `From MD ${deal.minPlayed}`
+                              : `Top ${deal.maxPos} only`;
                             return (
                               <div key={deal.name} style={{ flex: 1, border: `1px solid ${available ? '#1a1a2e' : '#ccc'}`, borderRadius: '4px', padding: '10px 8px', textAlign: 'center', background: available ? '#fff' : '#ebebeb', opacity: available ? 1 : 0.55 }}>
                                 <div style={{ fontSize: '13px', fontWeight: 'bold', marginBottom: '3px' }}>{deal.name}</div>
@@ -597,7 +764,7 @@ export function Stadium() {
                                   disabled={!available}
                                   onClick={() => signMediaDeal({ name: deal.name, revenuePerMatch: deal.revenuePerMatch, matchdays: deal.matchdays, matchdaysLeft: deal.matchdays })}
                                   style={{ padding: '5px 10px', background: available ? '#1a1a2e' : '#ccc', color: available ? '#fff' : '#888', border: 'none', borderRadius: '4px', cursor: available ? 'pointer' : 'default', fontSize: '12px', fontWeight: 'bold', width: '100%' }}>
-                                  {available ? 'SIGN DEAL' : `Top ${deal.maxPos} only`}
+                                  {btnLabel}
                                 </button>
                               </div>
                             );

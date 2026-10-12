@@ -6,7 +6,7 @@ export const TICKET_TYPES = [
   { name: 'Season Ticket Members', capacity: 2000 },
   { name: 'Season Ticket Stand',   capacity: 2000 },
   { name: 'Season Ticket Terrace', capacity: 2000 },
-  { name: 'VIP Lounge',            capacity: 500  },
+  { name: 'VIP Lounge',            capacity: 15   },
 ];
 
 export const TICKET_PRICE_PRESETS = {

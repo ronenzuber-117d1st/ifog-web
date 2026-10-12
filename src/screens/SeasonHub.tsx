@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/useGameStore';
-import { LEAGUE_TEAMS } from '../data/teams';
+import { getTeamById } from '../data/teams';
 import { EventModal } from '../components/EventModal';
 import { Layout } from '../components/Layout';
 import { img } from '../utils/images';
@@ -43,12 +43,13 @@ export function SeasonHub() {
   const navigate = useNavigate();
   const {
     managedTeamId, managerName, currentMatchday, totalMatchdays, table, fixtures,
-    balance, chairmanMessage, pendingEvent, dismissEvent, phase, portrait,
+    balance, chairmanMessage, pendingEvent, dismissEvent, phase, portrait, division,
   } = useGameStore();
 
   const [viewMatchday, setViewMatchday] = useState(currentMatchday);
+  const [geierDismissed, setGeierDismissed] = useState(false);
 
-  const myTeam = LEAGUE_TEAMS.find(t => t.id === managedTeamId)!;
+  const myTeam = getTeamById(managedTeamId)!;
   const myRow = table.find(r => r.teamId === managedTeamId);
 
   const nextFixture = fixtures.find(f =>
@@ -56,16 +57,27 @@ export function SeasonHub() {
     (f.homeTeamId === managedTeamId || f.awayTeamId === managedTeamId) &&
     f.homeGoals === undefined
   );
-  const matchHomeTeam = nextFixture ? LEAGUE_TEAMS.find(t => t.id === nextFixture.homeTeamId) : null;
-  const matchAwayTeam = nextFixture ? LEAGUE_TEAMS.find(t => t.id === nextFixture.awayTeamId) : null;
+  const matchHomeTeam = nextFixture ? getTeamById(nextFixture.homeTeamId) : null;
+  const matchAwayTeam = nextFixture ? getTeamById(nextFixture.awayTeamId) : null;
   const matchHomePos = table.findIndex(r => r.teamId === nextFixture?.homeTeamId) + 1;
   const matchAwayPos = table.findIndex(r => r.teamId === nextFixture?.awayTeamId) + 1;
   const homeIsMe = nextFixture?.homeTeamId === managedTeamId;
 
   const seasonOver = currentMatchday > totalMatchdays;
+  const myPos = table.findIndex(r => r.teamId === managedTeamId) + 1;
+  const inDanger = myPos >= 18 && (myRow?.played ?? 0) >= 10;
+  const lastPlayed = fixtures
+    .filter(f => (f.homeTeamId === managedTeamId || f.awayTeamId === managedTeamId) && f.homeGoals !== undefined)
+    .sort((a, b) => b.matchday - a.matchday)[0];
+  let portraitMood = '_2';
+  if (lastPlayed) {
+    const myG = lastPlayed.homeTeamId === managedTeamId ? (lastPlayed.homeGoals ?? 0) : (lastPlayed.awayGoals ?? 0);
+    const opG = lastPlayed.homeTeamId === managedTeamId ? (lastPlayed.awayGoals ?? 0) : (lastPlayed.homeGoals ?? 0);
+    portraitMood = myG > opG ? '_1' : myG < opG ? '_3' : '_2';
+  }
   const portraitSrc = portrait
-    ? img(`${portrait}_1.png`)
-    : img(`manag${((managedTeamId - 1) % 6) + 1}_1.png`);
+    ? img(`${portrait}${portraitMood}.png`)
+    : img(`manag${((managedTeamId - 1) % 6) + 1}${portraitMood}.png`);
 
   const teamAbbr = myTeam.name.replace(/^The /, '').slice(0, 3).toUpperCase();
   const teamColor = myTeam.color;
@@ -88,6 +100,40 @@ export function SeasonHub() {
     <Layout>
       {pendingEvent && phase === 'result' && (
         <EventModal event={pendingEvent} onClose={dismissEvent} />
+      )}
+      {!pendingEvent && phase === 'result' && inDanger && !geierDismissed && (
+        <div
+          onClick={() => setGeierDismissed(true)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 500,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            backdropFilter: 'blur(6px)', WebkitBackdropFilter: 'blur(6px)',
+            background: 'rgba(4,6,12,0.82)',
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 24 }}
+          >
+            <img
+              src={img('geier.png')}
+              alt=""
+              style={{ maxWidth: 520, maxHeight: '60vh', objectFit: 'contain', imageRendering: 'pixelated' }}
+            />
+            <button
+              onClick={() => setGeierDismissed(true)}
+              style={{
+                height: 48, padding: '0 48px', borderRadius: 12, border: 0,
+                background: '#c8f53d', color: '#070b16',
+                fontFamily: "'Big Shoulders Display', Impact, sans-serif",
+                fontWeight: 900, fontSize: 20, letterSpacing: '0.1em',
+                textTransform: 'uppercase', cursor: 'pointer',
+              }}
+            >
+              Continue
+            </button>
+          </div>
+        </div>
       )}
 
       <div style={{
@@ -154,13 +200,13 @@ export function SeasonHub() {
         {/* ── Center: League table ── */}
         <section style={{ minHeight: 0, display: 'flex', flexDirection: 'column', gap: 10, padding: '18px 20px', borderRadius: 16, background: '#0f1628', border: '1px solid #1c2640' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
-            <div style={{ fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 800, fontSize: 26, textTransform: 'uppercase', lineHeight: 1 }}>Premier League</div>
+            <div style={{ fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 800, fontSize: 26, textTransform: 'uppercase', lineHeight: 1 }}>{division === 1 ? 'Premier League' : 'First Division'}</div>
             <div style={{ display: 'flex', gap: 14, fontSize: 12, color: '#8d99b5' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#c8f53d', display: 'inline-block' }} />Champions
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#c8f53d', display: 'inline-block' }} />{division === 1 ? 'Champions' : 'Promotion'}
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#ff5a52', display: 'inline-block' }} />Relegation
+                <span style={{ width: 10, height: 10, borderRadius: 2, background: '#ff5a52', display: 'inline-block' }} />{division === 1 ? 'Relegation' : 'Danger zone'}
               </span>
             </div>
           </div>
@@ -180,12 +226,12 @@ export function SeasonHub() {
           {/* Rows */}
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 2, overflowY: 'auto' }}>
             {table.map((row, i) => {
-              const team = LEAGUE_TEAMS.find(t => t.id === row.teamId);
+              const team = getTeamById(row.teamId);
               if (!team) return null;
               const isMe = row.teamId === managedTeamId;
               const gd = row.goalsFor - row.goalsAgainst;
               const pos = i + 1;
-              const zone = pos === 1 ? '#c8f53d' : pos >= 18 ? '#ff5a52' : 'transparent';
+              const zone = (division === 1 ? pos === 1 : pos <= 3) ? '#c8f53d' : pos >= 18 ? '#ff5a52' : 'transparent';
               const form = getForm(row.teamId);
               const abbr = team.name.replace(/^The /, '').slice(0, 2).toUpperCase();
               return (
@@ -287,8 +333,8 @@ export function SeasonHub() {
             </div>
             <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
               {mdFixtures.map(f => {
-                const ht = LEAGUE_TEAMS.find(t => t.id === f.homeTeamId);
-                const at = LEAGUE_TEAMS.find(t => t.id === f.awayTeamId);
+                const ht = getTeamById(f.homeTeamId);
+                const at = getTeamById(f.awayTeamId);
                 if (!ht || !at) return null;
                 const isMe = f.homeTeamId === managedTeamId || f.awayTeamId === managedTeamId;
                 const hasScore = f.homeGoals !== undefined;

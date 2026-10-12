@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/useGameStore';
 import { img } from '../utils/images';
+import { isSoundEnabled, setSoundEnabled } from '../utils/sound';
+import { CreditsModal } from './CreditsModal';
 
 interface Props { children: React.ReactNode; lockNav?: boolean }
 
@@ -24,6 +26,8 @@ export function Layout({ children, lockNav = false }: Props) {
   const navigate = useNavigate();
   const { managedTeamId, currentMatchday, totalMatchdays, balance, table } = useGameStore();
   const [saved, setSaved] = useState(false);
+  const [soundOn, setSoundOn] = useState(isSoundEnabled);
+  const [showCredits, setShowCredits] = useState(false);
   const location = useLocation();
   const pos = table.findIndex(r => r.teamId === managedTeamId) + 1;
 
@@ -129,6 +133,39 @@ export function Layout({ children, lockNav = false }: Props) {
           </div>
         </div>
 
+        {/* CREDITS */}
+        <button
+          onClick={() => setShowCredits(true)}
+          title="Credits"
+          style={{
+            width: 44, height: 44, borderRadius: 10, border: '1px solid #2a3656',
+            background: 'transparent', color: '#8d99b5',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', flexShrink: 0,
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+          </svg>
+        </button>
+
+        {/* SOUND */}
+        <button
+          onClick={() => { const next = !soundOn; setSoundOn(next); setSoundEnabled(next); }}
+          title={soundOn ? 'Mute sound' : 'Unmute sound'}
+          style={{
+            width: 44, height: 44, borderRadius: 10, border: '1px solid #2a3656',
+            background: 'transparent', color: soundOn ? '#8d99b5' : '#3a4768',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            cursor: 'pointer', flexShrink: 0,
+          }}
+        >
+          {soundOn
+            ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+            : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+          }
+        </button>
+
         {/* LOAD */}
         <label title="Load save file" style={{
           width: 44, height: 44, borderRadius: 10, border: '1px solid #2a3656',
@@ -173,6 +210,8 @@ export function Layout({ children, lockNav = false }: Props) {
       <main style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
         {children}
       </main>
+
+      {showCredits && <CreditsModal onClose={() => setShowCredits(false)} />}
     </div>
   );
 }
