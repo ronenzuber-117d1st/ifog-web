@@ -58,7 +58,7 @@ export function SeasonEndScreen() {
   useEffect(() => {
     stopMusic();
     if (outcome === 'champion' || outcome === 'top4') {
-      setTimeout(() => playMusic('/sounds/IFOGB.mp3'), 500);
+      setTimeout(() => playMusic(`${import.meta.env.BASE_URL}sounds/IFOGB.mp3`), 500);
     }
   }, [outcome]);
 

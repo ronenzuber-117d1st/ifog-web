@@ -52,14 +52,17 @@ function playBuf(buf: AudioBuffer, vol = 1.0, offsetSec = 0) {
 
 // ─── Preload ──────────────────────────────────────────────────────────────────
 
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const snd = (f: string) => `${base}/sounds/${f}`;
+
 const SOUNDS = {
-  kickoff:  '/sounds/TRILLER.WAV',
-  halftime: '/sounds/MTRILLER.WAV',
-  fulltime: '/sounds/TRILLER3.WAV',
-  crowd:    '/sounds/LEISELP1.WAV',
+  kickoff:  snd('TRILLER.WAV'),
+  halftime: snd('MTRILLER.WAV'),
+  fulltime: snd('TRILLER3.WAV'),
+  crowd:    snd('LEISELP1.WAV'),
 };
 
-const BALL_URLS = Array.from({ length: 10 }, (_, i) => `/sounds/BALL${i}.WAV`);
+const BALL_URLS = Array.from({ length: 10 }, (_, i) => snd(`BALL${i}.WAV`));
 
 export async function preload(): Promise<void> {
   const all = [...Object.values(SOUNDS), ...BALL_URLS];
