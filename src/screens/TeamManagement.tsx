@@ -256,6 +256,7 @@ export function TeamManagement() {
                                 onError={(e) => { (e.currentTarget as HTMLImageElement).onerror = null; (e.currentTarget as HTMLImageElement).src = img(`torwart${skillTier(player.skill)}.png`); }}
 
                                 alt=""
+                                loading="lazy"
                                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 15%', display: 'block' }}
                               />
                               {/* Fitness badge */}
