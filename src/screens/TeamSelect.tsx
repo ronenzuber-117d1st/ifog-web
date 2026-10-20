@@ -82,7 +82,7 @@ export function TeamSelect() {
 
       {/* ── Left: map ── */}
       <div style={{ position: 'relative', flexShrink: 0, height: '100%', overflow: 'hidden' }}>
-        <img src="/images/mainmenu.jpg" alt="" style={{ height: '100%', width: 'auto', display: 'block' }} />
+        <img src={img('mainmenu.jpg')} alt="" style={{ height: '100%', width: 'auto', display: 'block' }} />
         <div style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: 160, background: 'linear-gradient(90deg, transparent, #070b16)' }} />
       </div>
 

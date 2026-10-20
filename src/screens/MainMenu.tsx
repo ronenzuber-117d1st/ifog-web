@@ -58,7 +58,7 @@ export function MainMenu() {
       {/* ── Left: illustrated Britain map ── */}
       <div style={{ position: 'relative', flexShrink: 0, height: '100%', overflow: 'hidden' }}>
         <img
-          src="/images/mainmenu.jpg"
+          src={img('mainmenu.jpg')}
           alt=""
           style={{ height: '100%', width: 'auto', display: 'block' }}
         />
