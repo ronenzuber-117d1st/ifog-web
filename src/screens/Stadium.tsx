@@ -74,7 +74,6 @@ const TEAM_PORTRAITS = [
   'manag1_2','manag2_2','manag3_2','manag4_2','manag5_2',
   'manag6_2','manak1_2','manak2_2','manak3_2','manak4_2',
 ];
-const teamPortrait = (teamId: number) => TEAM_PORTRAITS[(teamId - 1) % TEAM_PORTRAITS.length];
 
 export function Stadium() {
   const {
@@ -97,9 +96,9 @@ export function Stadium() {
   const inRelegation = myPos > totalTeams - 3;
   const inTopHalf = myPos <= totalTeams / 2;
   const lmHome = lastMatch?.fixture.homeTeamId === managedTeamId;
-  const lmMyGoals = lastMatch ? (lmHome ? lastMatch.fixture.homeGoals : lastMatch.fixture.awayGoals) : null;
-  const lmOppGoals = lastMatch ? (lmHome ? lastMatch.fixture.awayGoals : lastMatch.fixture.homeGoals) : null;
-  const lastResult = lmMyGoals === null ? null : lmMyGoals > lmOppGoals! ? 'win' : lmMyGoals < lmOppGoals! ? 'loss' : 'draw';
+  const lmMyGoals = lastMatch ? (lmHome ? lastMatch.fixture.homeGoals ?? null : lastMatch.fixture.awayGoals ?? null) : null;
+  const lmOppGoals = lastMatch ? (lmHome ? lastMatch.fixture.awayGoals ?? null : lastMatch.fixture.homeGoals ?? null) : null;
+  const lastResult = lmMyGoals == null ? null : lmMyGoals > lmOppGoals! ? 'win' : lmMyGoals < lmOppGoals! ? 'loss' : 'draw';
   const presidentQuote = (() => {
     if (!lastResult) return "Full confidence in our Manager. Let's have a great season!";
     if (lastResult === 'win') {
@@ -129,7 +128,7 @@ export function Stadium() {
   const isHome    = nextFix?.homeTeamId === managedTeamId;
   const myTeam    = getTeamById(managedTeamId)!;
   const oppTeamId = isHome ? nextFix?.awayTeamId : nextFix?.homeTeamId;
-  const oppTeam   = getTeamById(oppTeamId);
+  const oppTeam   = getTeamById(oppTeamId ?? 0);
   const mySkill   = (myTeam?.baseSkill ?? 55) + (isHome ? 3 : 0);
   const oppSkill  = (oppTeam?.baseSkill  ?? 55) + (!isHome ? 3 : 0);
   const total     = mySkill + oppSkill;

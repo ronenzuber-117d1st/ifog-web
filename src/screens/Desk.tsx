@@ -113,7 +113,7 @@ export function Desk() {
   );
   const isHome   = nextFix?.homeTeamId === managedTeamId;
   const oppTeamId = isHome ? nextFix?.awayTeamId : nextFix?.homeTeamId;
-  const oppTeam  = getTeamById(oppTeamId);
+  const oppTeam  = getTeamById(oppTeamId ?? 0);
   const [myOdds, oppOdds] = nextFix
     ? computeOdds(isHome ? myTeam.baseSkill : (oppTeam?.baseSkill ?? 55), isHome ? (oppTeam?.baseSkill ?? 55) : myTeam.baseSkill)
     : [17, 17];
@@ -673,19 +673,6 @@ function Pill({ color, bg, children }: { color: string; bg: string; children: Re
   );
 }
 
-function ToggleRow({ label, sub, value, onChange }: { label: string; sub: string; value: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 0', borderTop: '1px solid #1c2640' }}>
-      <div>
-        <div style={{ fontWeight: 700, fontSize: 15 }}>{label}</div>
-        <div style={{ fontSize: 13, color: '#5fd49a', marginTop: 2 }}>{sub}</div>
-      </div>
-      <button onClick={() => onChange(!value)} style={{ position: 'relative', width: 52, height: 28, borderRadius: 14, cursor: 'pointer', background: value ? '#16a34a' : '#1c2640', border: `1px solid ${value ? '#22c55e' : '#2a3656'}` }}>
-        <div style={{ position: 'absolute', top: 4, width: 18, height: 18, background: '#fff', borderRadius: '50%', transition: 'left 0.15s', left: value ? '28px' : '4px' }} />
-      </button>
-    </div>
-  );
-}
 
 function TransactionLog({ entries, showMatchday }: { entries: FinanceEntry[]; showMatchday?: boolean }) {
   const sorted = [...entries].sort((a, b) => b.matchday - a.matchday);

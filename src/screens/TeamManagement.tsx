@@ -237,7 +237,7 @@ export function TeamManagement() {
                     </div>
                     {/* Cards */}
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-                      {g.players.map((player, idx) => {
+                      {g.players.map((player) => {
                         const inXI = sel.has(player.id);
                         const injured = (player.injuredFor ?? 0) > 0;
                         const suspended = player.suspended ?? false;
@@ -559,7 +559,6 @@ export function TeamManagement() {
                     const done = photoLevel > i;
                     const current = photoLevel === i;
                     const locked = photoLevel < i;
-                    const color = done ? '#5fd49a' : current ? levelColors[i] : '#2a3656';
                     return (
                       <div key={i}>
                         <div style={{ display: 'grid', gridTemplateColumns: '28px minmax(0,1fr)', gap: 14, alignItems: 'center', minHeight: 56 }}>

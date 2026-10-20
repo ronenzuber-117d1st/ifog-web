@@ -758,8 +758,6 @@ function SetupPhase({ myTeam, opponent, isHome, currentMatchday, myPlayers, form
 
   const homeTeam = isHome ? myTeam : opponent;
   const awayTeam = isHome ? opponent : myTeam;
-  const homeAbbr = homeTeam.name.slice(0, 3).toUpperCase();
-  const awayAbbr = awayTeam.name.slice(0, 3).toUpperCase();
 
   const sortedPlayers = [...myPlayers].sort((a, b) => {
     const order = ['T', 'V', 'M', 'S'];
@@ -943,7 +941,7 @@ function SetupPhase({ myTeam, opponent, isHome, currentMatchday, myPlayers, form
 
           {/* KICK OFF */}
           <button onClick={() => onKickOff(allXI)} disabled={allXI.length < 11} style={{
-            height: 48, flexShrink: 0, borderRadius: 12, border: 0,
+            height: 48, flexShrink: 0, borderRadius: 12,
             background: allXI.length >= 11 ? '#c8f53d' : '#2a1820',
             color: allXI.length >= 11 ? '#070b16' : '#ff8a83',
             fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 900, fontSize: allXI.length >= 11 ? 22 : 14, letterSpacing: '0.08em', textTransform: 'uppercase',
@@ -966,7 +964,7 @@ function SetupPhase({ myTeam, opponent, isHome, currentMatchday, myPlayers, form
 
 // ── Playing Phase ─────────────────────────────────────────────────────────────
 
-function PlayingPhase({ snap, managedTeamId, portrait, formation, referee, currentMatchday, ballPos, liveScore, liveMinute, commentary, phase, goalFlash, showResultOverlay, onDismissResult, onSkip, halftime, onResumeHalftime, aggression, onAggressionChange, speed, onSpeedChange, paused, onTogglePause, onContinue, subEventsRef, physRef, commentaryRef, setCommentary }: {
+function PlayingPhase({ snap, managedTeamId, portrait: _portrait, formation: _formation, referee, currentMatchday, ballPos, liveScore, liveMinute, commentary, phase, goalFlash, showResultOverlay, onDismissResult, onSkip, halftime, onResumeHalftime, aggression, onAggressionChange, speed, onSpeedChange, paused, onTogglePause, onContinue, subEventsRef, physRef, commentaryRef, setCommentary }: {
   snap: MatchSnap; managedTeamId: number; portrait: string;
   formation: Formation; referee: typeof REFEREES[0]; currentMatchday: number;
   ballPos: { x: number; y: number };
@@ -983,8 +981,8 @@ function PlayingPhase({ snap, managedTeamId, portrait, formation, referee, curre
   commentaryRef: MutableRefObject<string[]>;
   setCommentary: (c: string[]) => void;
 }) {
-  const { stadium, borderSponsors, table, managerName, rosters, ticketSales } = useGameStore();
-  const { homeTeam, awayTeam, isHome, report } = snap;
+  const { stadium, borderSponsors, table, rosters } = useGameStore();
+  const { homeTeam, awayTeam, report } = snap;
 
   const allMyPlayers = (rosters[managedTeamId] ?? []).filter(p => !p.injuredFor && !p.suspended);
   const xiIds = new Set(snap.myXI.map(p => p.id));
@@ -1012,32 +1010,15 @@ function PlayingPhase({ snap, managedTeamId, portrait, formation, referee, curre
   const myIsHome = homeTeam.id === managedTeamId;
   const myGoals = myIsHome ? liveScore.home : liveScore.away;
   const oppGoals = myIsHome ? liveScore.away : liveScore.home;
-  const resultColor = phase === 'done'
-    ? (myGoals > oppGoals ? '#4ade80' : myGoals === oppGoals ? '#60a5fa' : '#f87171')
-    : '#ffffff';
-
   // Stadium image levels from upgrades (1–3)
   const pitchLevel  = stadium.pitch      as 1 | 2 | 3;
-  const seatsLevel  = stadium.seats      as 1 | 2 | 3;
   const facilLevel  = stadium.facilities as 1 | 2 | 3;
   const lightsLevel = stadium.lights     as 1 | 2 | 3;
 
   // Table positions
   const myPos = table.findIndex(r => r.teamId === managedTeamId) + 1;
-  const oppTeamId = myIsHome ? awayTeam.id : homeTeam.id;
-  const oppPos = table.findIndex(r => r.teamId === oppTeamId) + 1;
-
-  // Manager portraits — mood follows live score
-  const myMood   = myGoals > oppGoals ? '_1' : myGoals < oppGoals ? '_3' : '_2';
-  const myPortrait = img(`${portrait}${myMood}.png`);
-  const oppPortraitId = ((isHome ? awayTeam.id : homeTeam.id) - 1) % 5 + 1;
-  const oppPortrait = img(`manag${oppPortraitId}_2.png`);
-
-  const myTeam = myIsHome ? homeTeam : awayTeam;
-  const oppTeam = myIsHome ? awayTeam : homeTeam;
-
-  // Attendance from ticket sales
-  const attendance = Array.isArray(ticketSales) ? (ticketSales as number[]).reduce((a, b) => a + b, 0) : 0;
+  // Attendance based on stadium capacity + match seed
+  const seatsCapacity = [8000, 15000, 30000][(stadium.seats as number) - 1] ?? 8000;
 
   // Team abbreviations for scoreboard circles
   const homeAbbr = homeTeam.name.slice(0, 3).toUpperCase();
@@ -1060,6 +1041,7 @@ function PlayingPhase({ snap, managedTeamId, portrait, formation, referee, curre
 
   // Match stats derived from events + seeded pseudorandom
   const seed = homeTeam.id * 31 + awayTeam.id * 17;
+  const attendance = Math.round(seatsCapacity * 0.6 + seed % Math.round(seatsCapacity * 0.35));
   const pct = Math.min(1, liveMinute / 90);
   const evts = report.events.filter(e => e.minute <= liveMinute);
   const hG = evts.filter(e => e.type === 'goal' && e.teamId === homeTeam.id).length;
@@ -1925,18 +1907,3 @@ function PlayingPhase({ snap, managedTeamId, portrait, formation, referee, curre
   );
 }
 
-function ClockPie({ minute }: { minute: number }) {
-  const pct = Math.round((minute / 90) * 100);
-  return (
-    <div style={{ position: 'relative', width: '58px', height: '58px', margin: '0 auto' }}>
-      <div style={{
-        width: '58px', height: '58px', borderRadius: '50%',
-        background: `conic-gradient(#4ade80 ${pct * 3.6}deg, #1e2535 ${pct * 3.6}deg)`,
-        border: '2px solid #28314a',
-      }} />
-      <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
-        <span style={{ color: '#fff', fontSize: '12px', fontWeight: 'bold', fontFamily: 'monospace', lineHeight: 1 }}>{minute}'</span>
-      </div>
-    </div>
-  );
-}

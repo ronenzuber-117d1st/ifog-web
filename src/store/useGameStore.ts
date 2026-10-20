@@ -416,7 +416,7 @@ export const useGameStore = create<GameStore>()(
 
       playMatchday: (liveReport?: MatchReport, bribed?: boolean) => {
         const s = get();
-        const { currentMatchday, totalMatchdays, fixtures, rosters, managedTeamId, formation, startingXI, table, balance, financeHistory, managerName, priceLevel, foodEnabled, merchandiseEnabled, trainingSkills, trainingShape, borderSponsors, stadium, difficulty, staff, pendingBet, eventLog, lastEventId, mediaDeal, foodStock, shopStock, practiceMatchBooked } = s;
+        const { currentMatchday, totalMatchdays, fixtures, rosters, managedTeamId, formation, startingXI, table, balance, financeHistory, managerName, priceLevel, trainingSkills, trainingShape, borderSponsors, stadium, difficulty, staff, pendingBet, eventLog, lastEventId, mediaDeal, foodStock, shopStock, practiceMatchBooked } = s;
         const xiSet = new Set(startingXI ?? []);
 
         const dayFixtures = fixtures.filter(f => f.matchday === currentMatchday && !f.homeGoals && f.homeGoals !== 0);
@@ -917,7 +917,7 @@ export const useGameStore = create<GameStore>()(
       startNewSeason: () => {
         const s = get();
         const {
-          managerName, managedTeamId, portrait, difficulty, table, division, seasonsInDivision,
+          managerName, managedTeamId, table, division, seasonsInDivision,
           balance, stadium, staff, rosters, formation,
           priceLevel, foodEnabled, merchandiseEnabled,
           trainingMassage, trainingSkills, trainingShape,

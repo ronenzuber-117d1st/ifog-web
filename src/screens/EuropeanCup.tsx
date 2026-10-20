@@ -142,7 +142,7 @@ export function EuropeanCup() {
   const { round, semiOpponentId, finalOpponentId, otherSemiIds, semiResult, finalResult, lastMatchReport } = europeanCup;
 
   const myTeam = getTeamById(managedTeamId)!;
-  const finalOpp = getTeamById(finalOpponentId)!;
+;
 
   const done = round === 'done';
   const wonCup = finalResult === 'win';
@@ -173,8 +173,6 @@ export function EuropeanCup() {
   // Final bracket scores
   const finalMyScore = (lastWasFinal && myScore !== undefined) ? myScore : undefined;
   const finalOppScore = (lastWasFinal && oppScore !== undefined) ? oppScore : undefined;
-  const semiMyScore = (!lastWasFinal && myScore !== undefined) ? myScore : undefined;
-  const semiOppScore = (!lastWasFinal && oppScore !== undefined) ? oppScore : undefined;
 
   // Upcoming match details
   const upcomingOpponentId = round === 'semi' ? semiOpponentId : finalOpponentId;
