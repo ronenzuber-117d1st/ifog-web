@@ -40,7 +40,7 @@ const REFEREES = [
   { name: 'P. Softglove', style: 'LENIENT',     desc: 'Easy-going. Lets the game flow.',        bribeable: false, color: '#4ade80', img: 'schieds5.png' },
   { name: 'T. Steadman',  style: 'VETERAN',     desc: 'Fair and consistent. Hard to rattle.',   bribeable: false, color: '#60a5fa', img: 'schieds3.png' },
   { name: 'D. Slippery',  style: 'DODGY',       desc: 'Known for flexible interpretations.',    bribeable: true,  color: '#f59e0b', img: 'schieds2.png' },
-  { name: 'B. Bumble',    style: 'INCOMPETENT', desc: 'Bewildered. Open to persuasion.',        bribeable: false, color: '#c084fc', img: 'schieds1.png' },
+  { name: 'B. Bumble',    style: 'INCOMPETENT', desc: 'Bewildered. Makes it up as he goes.',    bribeable: false, color: '#c084fc', img: 'schieds1.png' },
 ];
 
 function pickReferee(matchday: number, teamId: number) {
@@ -82,6 +82,18 @@ function getFormationPositions(formation: Formation, isHome: boolean): { x: numb
       { x: 10, y: f(52) }, { x: 28, y: f(52) }, { x: 50, y: f(52) }, { x: 72, y: f(52) }, { x: 90, y: f(52) },
       { x: 50, y: f(28) },
     ],
+    '5-4-1': [
+      { x: 50, y: f(90) },
+      { x: 10, y: f(72) }, { x: 28, y: f(72) }, { x: 50, y: f(72) }, { x: 72, y: f(72) }, { x: 90, y: f(72) },
+      { x: 16, y: f(52) }, { x: 38, y: f(52) }, { x: 62, y: f(52) }, { x: 84, y: f(52) },
+      { x: 50, y: f(28) },
+    ],
+    '3-4-3': [
+      { x: 50, y: f(90) },
+      { x: 25, y: f(72) }, { x: 50, y: f(72) }, { x: 75, y: f(72) },
+      { x: 16, y: f(52) }, { x: 38, y: f(52) }, { x: 62, y: f(52) }, { x: 84, y: f(52) },
+      { x: 20, y: f(28) }, { x: 50, y: f(28) }, { x: 80, y: f(28) },
+    ],
   };
   return layouts[formation] ?? layouts['4-4-2'];
 }
@@ -89,10 +101,10 @@ function getFormationPositions(formation: Formation, isHome: boolean): { x: numb
 const POS_LABEL: Record<string, string> = { T: 'GK', V: 'DEF', M: 'MID', S: 'FWD' };
 const POS_COLOR: Record<string, string> = { T: '#f59e0b', V: '#60a5fa', M: '#4ade80', S: '#f87171' };
 
-const FORMATIONS: Formation[] = ['4-4-2', '4-3-3', '3-5-2', '5-3-2', '4-5-1'];
+const FORMATIONS: Formation[] = ['4-4-2', '4-3-3', '3-5-2', '5-3-2', '4-5-1', '5-4-1', '3-4-3'];
 const FORMATION_DESC: Record<Formation, string> = {
   '4-4-2': 'Balanced', '4-3-3': 'Attacking', '3-5-2': 'Midfield',
-  '5-3-2': 'Defensive', '4-5-1': 'Ultra-def',
+  '5-3-2': 'Defensive', '4-5-1': 'Ultra-def', '5-4-1': 'Fortress', '3-4-3': 'All-out',
 };
 
 const GENERIC_COMMENTARY = [
@@ -638,7 +650,7 @@ export function MatchDay() {
   }
 
   return (
-    <Layout lockNav={phase === 'playing'}>
+    <Layout lockNav={phase === 'playing' || phase === 'done'}>
       <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
         {phase === 'setup' && (
           <SetupPhase
@@ -875,7 +887,7 @@ function SetupPhase({ myTeam, opponent, isHome, currentMatchday, myPlayers, form
               <div
                 onMouseEnter={() => setRefHover(true)}
                 onMouseLeave={() => setRefHover(false)}
-                style={{ width: 72, height: 100, borderRadius: 10, overflow: 'hidden', flexShrink: 0, border: '1px solid #1c2640', cursor: 'zoom-in', transform: refHover ? 'scale(1.5)' : 'scale(1)', transformOrigin: 'top left', transition: 'transform 0.2s ease', position: 'relative', zIndex: refHover ? 10 : 1 }}
+                style={{ width: 72, height: 100, borderRadius: 10, overflow: 'hidden', flexShrink: 0, border: '1px solid #1c2640', cursor: 'zoom-in', transform: refHover ? 'scale(2.2)' : 'scale(1)', transformOrigin: 'top left', transition: 'transform 0.2s ease', position: 'relative', zIndex: refHover ? 10 : 1 }}
               >
                 <img src={img(referee.img)} style={{ width: '100%', height: '100%', objectFit: 'cover', imageRendering: 'pixelated' }} alt="" />
               </div>
@@ -1658,7 +1670,7 @@ function PlayingPhase({ snap, managedTeamId, portrait, formation, referee, curre
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M7 4v13"/><path d="M3 13l4 4 4-4"/><path d="M17 20V7"/><path d="M21 11l-4-4-4 4"/></svg>
                 Substitutions
               </button>
-              <button onClick={onResumeHalftime} style={{ height: 52, padding: '0 26px', borderRadius: 12, background: '#c8f53d', color: '#070b16', fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 900, fontSize: 22, letterSpacing: '0.12em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 10, border: 0, cursor: 'pointer' }}>
+              <button onClick={onResumeHalftime} style={{ height: 52, padding: '0 26px', borderRadius: 12, background: '#c8f53d', color: '#070b16', fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 900, fontSize: 16, letterSpacing: '0.08em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 10, border: 0, cursor: 'pointer', whiteSpace: 'nowrap' }}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l13 8-13 8z"/></svg>
                 Kick off 2nd half
               </button>

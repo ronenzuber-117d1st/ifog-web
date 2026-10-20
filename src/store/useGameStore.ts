@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { GamePhase, Formation, Player, TableRow, Fixture, MatchReport, GameEvent, FinanceEntry, Position } from '../types/game';
+import type { GamePhase, Formation, Player, TableRow, Fixture, MatchReport, GameEvent, FinanceEntry, Position, EuropeanCupState } from '../types/game';
 
 const POS_ORDER: Position[] = ['T', 'V', 'M', 'S'];
 
@@ -79,7 +79,7 @@ function revalidateXI(
   // 3. Not enough players — return whatever we can
   return { xi: computeXI(players, currentFormation), formation: currentFormation };
 }
-import { getTeamById, getSeasonTeamIds, getAllRosters, pickShirtNumber } from '../data/teams';
+import { getTeamById, getSeasonTeamIds, getAllRosters, getRoster, pickShirtNumber } from '../data/teams';
 import { GAME_EVENTS, CHAIRMAN_MESSAGES } from '../data/events';
 import { STARTING_BALANCE, FOOD_PRICES, MERCH_PRICES, TICKET_PRICE_PRESETS, calcPlayerWage, calcTicketRevenue, calcTicketSalesByDemand, calcDemand, calcFoodSales, calcMerchSales, calcTotalAttendance } from '../data/finances';
 import { generateFixtures } from '../engine/scheduler';
@@ -159,6 +159,8 @@ export interface GameStore {
   staff: StaffState;
   pendingBet: { amount: number; winMultiplier: number } | null;
   eventLog: { matchday: number; text: string }[];
+  lastEventId: number | null;
+  practiceMatchBooked: boolean;
 
   // Media
   mediaDeal: MediaDeal | null;
@@ -176,6 +178,9 @@ export interface GameStore {
 
   // End-of-game state
   sackReason: string | null;
+
+  // European Cup
+  europeanCup: EuropeanCupState | null;
 
   startNewGame: (managerName: string, teamId: number, portrait?: string, difficulty?: Difficulty, division?: 1 | 2, seasonsInDivision?: number) => void;
   playMatchday: (liveReport?: MatchReport, bribed?: boolean) => void;
@@ -205,6 +210,8 @@ export interface GameStore {
   cancelMediaDeal: () => void;
   bookPracticeMatch: () => void;
   startNewSeason: () => void;
+  startEuropeanCup: () => void;
+  playEuropeanCupMatch: (liveReport?: MatchReport) => void;
 }
 
 function makeTableRow(teamId: number): TableRow {
@@ -244,8 +251,9 @@ function pickEvent(ctx: {
   table: TableRow[];
   managedTeamId: number;
   squad: Player[];
+  lastEventId: number | null;
 }): GameEvent | null {
-  const { bribed, staff, stadium, table, managedTeamId, squad } = ctx;
+  const { bribed, staff, stadium, table, managedTeamId, squad, lastEventId } = ctx;
 
   // #7 bribe-caught: only fires when player actually bribed, 35% chance
   if (bribed && Math.random() < 0.35) {
@@ -265,6 +273,7 @@ function pickEvent(ctx: {
   const hasPlayers  = squad.length > 0;
 
   const pool = GAME_EVENTS.filter(e => {
+    if (e.id === lastEventId) return false;       // no repeat of last event
     switch (e.id) {
       case 7:  return false;                      // bribe — handled above
       case 2:  return staff.fishChips > 0;        // fast food confiscated: need food stand
@@ -336,6 +345,8 @@ export const useGameStore = create<GameStore>()(
       staff: { fishChips: 0, fanShop: 0, ticketSales: 0, cheerleader: 0, coach: 0 },
       pendingBet: null,
       eventLog: [],
+      lastEventId: null,
+      practiceMatchBooked: false,
       mediaDeal: null,
       foodStock: Array(10).fill(0),
       shopStock: Array(10).fill(0),
@@ -343,6 +354,7 @@ export const useGameStore = create<GameStore>()(
       sackReason: null,
       division: 1,
       seasonsInDivision: 1,
+      europeanCup: null,
 
       startNewGame: (managerName, teamId, portrait, difficulty = 'intermediate', division = 1, seasonsInDivision = 1) => {
         const seasonTeamIds = getSeasonTeamIds(division, teamId);
@@ -391,9 +403,10 @@ export const useGameStore = create<GameStore>()(
           staff: { fishChips: 0, fanShop: 0, ticketSales: 0, cheerleader: 0, coach: 0 },
           pendingBet: null,
           eventLog: [],
+          practiceMatchBooked: false,
           mediaDeal: null,
-          foodStock: Array(10).fill(800),
-          shopStock: Array(10).fill(40),
+          foodStock: Array(10).fill(0),
+          shopStock: Array(10).fill(0),
           chairmanPortraitIdx: chairmanIdx,
           sackReason: null,
           division,
@@ -403,7 +416,7 @@ export const useGameStore = create<GameStore>()(
 
       playMatchday: (liveReport?: MatchReport, bribed?: boolean) => {
         const s = get();
-        const { currentMatchday, totalMatchdays, fixtures, rosters, managedTeamId, formation, startingXI, table, balance, financeHistory, managerName, priceLevel, foodEnabled, merchandiseEnabled, trainingSkills, trainingShape, borderSponsors, stadium, difficulty, staff, pendingBet, eventLog, mediaDeal, foodStock, shopStock } = s;
+        const { currentMatchday, totalMatchdays, fixtures, rosters, managedTeamId, formation, startingXI, table, balance, financeHistory, managerName, priceLevel, foodEnabled, merchandiseEnabled, trainingSkills, trainingShape, borderSponsors, stadium, difficulty, staff, pendingBet, eventLog, lastEventId, mediaDeal, foodStock, shopStock, practiceMatchBooked } = s;
         const xiSet = new Set(startingXI ?? []);
 
         const dayFixtures = fixtures.filter(f => f.matchday === currentMatchday && !f.homeGoals && f.homeGoals !== 0);
@@ -494,13 +507,13 @@ export const useGameStore = create<GameStore>()(
         const newShopStock = actualShopSold ? shopStock.map((qty, i) => qty - actualShopSold[i]) : [...shopStock];
 
         const squad = rosters[managedTeamId] ?? [];
-        const rawWages = squad.reduce((sum, p) => sum + calcPlayerWage(p.skill, p.age), 0);
+        const rawWages = squad.reduce((sum, p) => sum + (p.wage ?? calcPlayerWage(p.skill, p.age)), 0);
         const wages = Math.max(0, rawWages - (staff.coach === 4 ? 10_000 : 0)); // Mag Catcher (Torry) saves £10K
         const matchRevenue = ticketRevenue + foodRevenue + shopRevenue;
         const net = matchRevenue - wages;
 
         const activePlayers = squad.filter(p => !p.injuredFor && !p.suspended);
-        const event = pickEvent({ bribed, staff, stadium, table, managedTeamId, squad: activePlayers });
+        const event = pickEvent({ bribed, staff, stadium, table, managedTeamId, squad: activePlayers, lastEventId });
         const eventMoney = event ? event.moneyEffect : 0;
         const eventPoints = event ? event.pointsEffect : 0;
 
@@ -656,11 +669,17 @@ export const useGameStore = create<GameStore>()(
             const scored = goalEvents.filter(e => e.playerName === p.name).length;
             if (scored > 0) next = { ...next, goals: (next.goals ?? 0) + scored };
             // Injury chance for starters only; Diana Dancer (Flower Power) reduces from 8% to 5%
-            if (next.injuredFor === 0 && !next.suspended && xiSet.has(p.id)) {
+            const wasHealthy = next.injuredFor === 0;
+            if (wasHealthy && !next.suspended && xiSet.has(p.id)) {
               const chance = staff.coach === 2 ? 0.05 : 0.08;
               if (Math.random() < chance) {
                 next = { ...next, injuredFor: 1 + Math.floor(Math.random() * 3) };
               }
+            }
+            // Injury penalty: -0.5 skill at moment of injury (streaks unchanged)
+            const justInjured = wasHealthy && next.injuredFor > 0;
+            if (justInjured) {
+              next = { ...next, skill: Math.max(3, next.skill - 0.5) };
             }
             return next;
           });
@@ -677,6 +696,22 @@ export const useGameStore = create<GameStore>()(
             }
           }
         }
+
+        // Training: practice booked → progress+1 (at 8 → +0.5 skill); miss → progress-1 + missStreak+1 (at 8 → -0.5 skill)
+        // Injured players: streaks frozen; suspended: treated normally
+        newRosters[managedTeamId] = (newRosters[managedTeamId] ?? []).map(p => {
+          if (p.injuredFor > 0) return p; // frozen while injured
+          if (practiceMatchBooked) {
+            const prog = (p.trainingProgress ?? 0) + 1;
+            if (prog >= 8) return { ...p, skill: Math.min(9, p.skill + 0.5), trainingProgress: 0, missStreak: 0 };
+            return { ...p, trainingProgress: prog, missStreak: 0 };
+          } else {
+            const prog = Math.max(0, (p.trainingProgress ?? 0) - 1);
+            const miss = (p.missStreak ?? 0) + 1;
+            if (miss >= 8) return { ...p, skill: Math.max(3, p.skill - 0.5), trainingProgress: prog, missStreak: 0 };
+            return { ...p, trainingProgress: prog, missStreak: miss };
+          }
+        });
 
         // Revalidate starting XI — replace unavailable players, fall back to alt formation if needed
         const { xi: newXI, formation: newFormation } = revalidateXI(
@@ -711,10 +746,12 @@ export const useGameStore = create<GameStore>()(
           phase: endPhase,
           sackReason: newSackReason,
           transfersUsed: 0,
+          practiceMatchBooked: false,
           borderSponsors: newBorderSponsors,
           borderOfferIdx: 0,
           pendingBet: null,
           eventLog: newEventLog,
+          lastEventId: event?.id ?? null,
           mediaDeal: newMediaDeal,
           foodStock: newFoodStock,
           shopStock: newShopStock,
@@ -749,7 +786,7 @@ export const useGameStore = create<GameStore>()(
         const updated = players.map(p => {
           if (p.id !== playerId) return p;
           const newProgress = p.trainingProgress + 1;
-          if (newProgress >= 5) return { ...p, skill: Math.min(9, p.skill + 1), trainingProgress: 0 };
+          if (newProgress >= 8) return { ...p, skill: Math.min(9, p.skill + 0.5), trainingProgress: 0, missStreak: 0 };
           return { ...p, trainingProgress: newProgress };
         });
         set({ rosters: { ...rosters, [managedTeamId]: updated }, balance: balance - cost });
@@ -779,11 +816,11 @@ export const useGameStore = create<GameStore>()(
 
       hirePlayer: (player) => {
         const { rosters, managedTeamId, balance, transfersUsed, currentMatchday, financeHistory } = get();
-        const cost = player.skill * 75_000;
-        if (transfersUsed >= 3 || balance < cost) return;
+        const cost = player.skill >= 8 ? Math.round(player.skill * player.skill * 20_000) : player.skill * 75_000;
+        if (transfersUsed >= 3) return;
         const players = rosters[managedTeamId] ?? [];
         const usedNumbers = new Set(players.map(p => p.shirtNumber).filter((n): n is number => !!n));
-        const playerWithShirt = { ...player, shirtNumber: pickShirtNumber(player.position as Position, usedNumbers) };
+        const playerWithShirt = { ...player, shirtNumber: pickShirtNumber(player.position as Position, usedNumbers), wage: calcPlayerWage(player.skill, player.age) };
         set({
           rosters: { ...rosters, [managedTeamId]: [...players, playerWithShirt] },
           balance: balance - cost,
@@ -878,11 +915,17 @@ export const useGameStore = create<GameStore>()(
       setMerchandiseEnabled: (merchandiseEnabled) => set({ merchandiseEnabled }),
       resetGame: () => set({ phase: 'menu', managerName: '', managedTeamId: 1, sackReason: null }),
       startNewSeason: () => {
-        const { managerName, managedTeamId, portrait, difficulty, table, division, seasonsInDivision } = get();
+        const s = get();
+        const {
+          managerName, managedTeamId, portrait, difficulty, table, division, seasonsInDivision,
+          balance, stadium, staff, rosters, formation,
+          priceLevel, foodEnabled, merchandiseEnabled,
+          trainingMassage, trainingSkills, trainingShape,
+        } = s;
         const pos = table.findIndex(r => r.teamId === managedTeamId) + 1;
 
         let newDivision: 1 | 2 = division;
-        let newSeasonsInDivision = seasonsInDivision + 1;
+        let newSeasonsInDivision = division === 2 ? seasonsInDivision + 1 : seasonsInDivision;
 
         if (division === 1 && pos >= 18) {
           newDivision = 2;
@@ -900,7 +943,72 @@ export const useGameStore = create<GameStore>()(
           return;
         }
 
-        get().startNewGame(managerName, managedTeamId, portrait, difficulty, newDivision, newSeasonsInDivision);
+        const seasonTeamIds = getSeasonTeamIds(newDivision, managedTeamId);
+        const freshRosters = getAllRosters(seasonTeamIds);
+
+        // Keep managed squad: age +1, renegotiate wages, reset yellow cards / suspensions / goals
+        const myPlayers = (rosters[managedTeamId] ?? []).map(p => ({
+          ...p,
+          age: p.age + 1,
+          wage: calcPlayerWage(p.skill, p.age + 1),
+          yellowCards: 0,
+          suspended: false,
+          goals: 0,
+        }));
+
+        const newRosters = { ...freshRosters, [managedTeamId]: myPlayers };
+        const fixtures = generateFixtures(seasonTeamIds);
+        const newTable = seasonTeamIds.map(id => makeTableRow(id));
+
+        const playerIdx = (managedTeamId - 1) % 20;
+        let chairmanIdx = Math.floor(Math.random() * 19);
+        if (chairmanIdx >= playerIdx) chairmanIdx++;
+
+        const divChanged = newDivision !== division;
+        const welcomeMsg = divChanged
+          ? (newDivision === 1 ? `Welcome to the Premier League, ${managerName}!` : `A tough call, ${managerName}. Prove yourself in the First Division.`)
+          : `Another season begins, ${managerName}. Let's go.`;
+
+        set({
+          phase: 'season',
+          currentMatchday: 1,
+          totalMatchdays: 38,
+          rosters: newRosters,
+          startingXI: computeXI(myPlayers, formation),
+          table: newTable,
+          fixtures,
+          division: newDivision,
+          seasonsInDivision: newSeasonsInDivision,
+          // ── Carry over ──
+          balance,
+          stadium,
+          staff,
+          formation,
+          priceLevel,
+          foodEnabled,
+          merchandiseEnabled,
+          trainingMassage,
+          trainingSkills,
+          trainingShape,
+          // ── Season reset ──
+          financeHistory: [],
+          pendingEvent: null,
+          lastMatch: null,
+          chairmanMessage: welcomeMsg,
+          transfersUsed: 0,
+          shirtSponsor: null,
+          borderSponsors: [],
+          borderOfferIdx: 0,
+          mediaDeal: null,
+          pendingBet: null,
+          eventLog: [],
+          practiceMatchBooked: false,
+          foodStock: Array(10).fill(0),
+          shopStock: Array(10).fill(0),
+          sackReason: null,
+          chairmanPortraitIdx: chairmanIdx,
+          europeanCup: null,
+        });
       },
       setStaff: (role, tier) => {
         const { staff } = get();
@@ -915,25 +1023,123 @@ export const useGameStore = create<GameStore>()(
       signMediaDeal: (deal) => set({ mediaDeal: deal }),
       cancelMediaDeal: () => set({ mediaDeal: null }),
       bookPracticeMatch: () => {
-        const { rosters, managedTeamId, balance, financeHistory, currentMatchday } = get();
+        const { balance, financeHistory, currentMatchday } = get();
         const cost = 87_300;
         if (balance < cost) return;
-        const updated = (rosters[managedTeamId] ?? []).map(p => {
-          if (p.injuredFor > 0 || p.suspended) return p;
-          const newProgress = p.trainingProgress + 1;
-          if (newProgress >= 5) return { ...p, skill: Math.min(9, p.skill + 1), trainingProgress: 0 };
-          return { ...p, trainingProgress: newProgress };
-        });
         set({
           balance: balance - cost,
-          rosters: { ...rosters, [managedTeamId]: updated },
+          practiceMatchBooked: true,
           financeHistory: [...financeHistory, { matchday: currentMatchday, description: 'Practice match', amount: -cost, running: balance - cost }],
+        });
+      },
+
+      startEuropeanCup: () => {
+        const ids = [41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55];
+        for (let i = ids.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [ids[i], ids[j]] = [ids[j], ids[i]];
+        }
+        // finalOpponentId must be one of the other semi teams (the "winner" of SF1)
+        const otherSemiWinner = Math.random() < 0.5 ? ids[1] : ids[2];
+        set({
+          europeanCup: {
+            round: 'semi',
+            semiOpponentId: ids[0],
+            finalOpponentId: otherSemiWinner,
+            otherSemiIds: [ids[1], ids[2]],
+            semiResult: null,
+            finalResult: null,
+            lastMatchReport: null,
+          },
+        });
+      },
+
+      playEuropeanCupMatch: (liveReport) => {
+        const s = get();
+        const { europeanCup, managedTeamId, rosters, formation, startingXI, staff, trainingSkills, trainingShape, stadium, difficulty, balance, financeHistory } = s;
+        if (!europeanCup || europeanCup.round === 'done') return;
+
+        const opponentId = europeanCup.round === 'semi' ? europeanCup.semiOpponentId : europeanCup.finalOpponentId;
+        const myTeam = getTeamById(managedTeamId)!;
+        const oppTeam = getTeamById(opponentId)!;
+        const myPlayers = rosters[managedTeamId] ?? [];
+        const oppPlayers = getRoster(opponentId);
+
+        const xiSet = new Set(startingXI ?? []);
+        const xiMyPlayers = myPlayers.filter(p => xiSet.size > 0 ? xiSet.has(p.id) : true);
+
+        const difficultyMod = difficulty === 'beginner' ? 1.12 : difficulty === 'expert' ? 0.88 : 1.0;
+        const coachBonus = staff.coach === 3 ? 0.04 : 0;
+        const trainingMod = (1 + trainingSkills * 0.008 + trainingShape * 0.005 + (stadium.pitch - 1) * 0.02 + coachBonus) * difficultyMod;
+
+        const fakeFixture: Fixture = { id: `euro-${europeanCup.round}`, matchday: 0, homeTeamId: managedTeamId, awayTeamId: opponentId };
+
+        const report = liveReport ?? simulateFullMatch(fakeFixture, myTeam, oppTeam, xiMyPlayers, oppPlayers, formation, trainingMod);
+        const homeGoals = report.fixture.homeGoals!;
+        const awayGoals = report.fixture.awayGoals!;
+
+        // Draws in cup = away team wins (player loses unless they scored more)
+        const won = homeGoals > awayGoals;
+        const result: 'win' | 'loss' = won ? 'win' : 'loss';
+
+        const prize = europeanCup.round === 'semi'
+          ? (won ? 150_000 : 50_000)
+          : (won ? 500_000 : 100_000);
+        const prizeDesc = europeanCup.round === 'semi'
+          ? (won ? 'European Cup: semi-final win' : 'European Cup: semi-final participation')
+          : (won ? 'European Cup: winners bonus' : 'European Cup: final participation');
+
+        const newBalance = balance + prize;
+        const newRound: EuropeanCupState['round'] = europeanCup.round === 'semi'
+          ? (won ? 'final' : 'done')
+          : 'done';
+
+        // Apply match effects to managed squad (injuries, cards, goals)
+        const newRosters = { ...s.rosters };
+        const matchEvents = report.events.filter(e => e.teamId === managedTeamId);
+        const cardEvents = matchEvents.filter(e => e.type === 'yellow' || e.type === 'red');
+        const goalEvents = matchEvents.filter(e => e.type === 'goal');
+        newRosters[managedTeamId] = myPlayers.map(p => {
+          let next = p.injuredFor > 0 ? { ...p, injuredFor: p.injuredFor - 1 } : { ...p };
+          if (next.suspended) next = { ...next, suspended: false };
+          for (const ev of cardEvents) {
+            if (ev.playerName === p.name) {
+              if (ev.type === 'red') {
+                next = { ...next, suspended: true };
+              } else {
+                const newYellows = (next.yellowCards ?? 0) + 1;
+                next = newYellows >= 2 ? { ...next, yellowCards: 0, suspended: true } : { ...next, yellowCards: newYellows };
+              }
+            }
+          }
+          const scored = goalEvents.filter(e => e.playerName === p.name).length;
+          if (scored > 0) next = { ...next, goals: (next.goals ?? 0) + scored };
+          const wasHealthy = next.injuredFor === 0;
+          if (wasHealthy && !next.suspended && xiSet.has(p.id)) {
+            const chance = staff.coach === 2 ? 0.05 : 0.08;
+            if (Math.random() < chance) next = { ...next, injuredFor: 1 + Math.floor(Math.random() * 3) };
+          }
+          if (wasHealthy && next.injuredFor > 0) next = { ...next, skill: Math.max(3, next.skill - 0.5) };
+          return next;
+        });
+
+        set({
+          balance: newBalance,
+          rosters: newRosters,
+          financeHistory: [...financeHistory, { matchday: 99, description: prizeDesc, amount: prize, running: newBalance }],
+          europeanCup: {
+            ...europeanCup,
+            round: newRound,
+            semiResult: europeanCup.round === 'semi' ? result : europeanCup.semiResult,
+            finalResult: europeanCup.round === 'final' ? result : europeanCup.finalResult,
+            lastMatchReport: report,
+          },
         });
       },
     }),
     {
       name: 'ifog-game-state',
-      version: 5,
+      version: 7,
       migrate: (state: any) => {
         const total = (state.trainingMassage ?? 0) + (state.trainingSkills ?? 0) + (state.trainingShape ?? 0);
         if (total > 7) {
@@ -941,14 +1147,27 @@ export const useGameStore = create<GameStore>()(
           state.trainingSkills = 4;
           state.trainingShape = 2;
         }
-        if (!Array.isArray(state.foodStock)) state.foodStock = Array(10).fill(800);
-        if (!Array.isArray(state.shopStock)) state.shopStock = Array(10).fill(40);
+        if (!Array.isArray(state.foodStock)) state.foodStock = Array(10).fill(0);
+        if (!Array.isArray(state.shopStock)) state.shopStock = Array(10).fill(0);
         if (typeof state.chairmanPortraitIdx !== 'number') state.chairmanPortraitIdx = 0;
         if (typeof state.stadium?.vipLounge !== 'number') {
           state.stadium = { ...(state.stadium ?? {}), vipLounge: 0 };
         }
         if (!state.division) state.division = 1;
         if (!state.seasonsInDivision) state.seasonsInDivision = 1;
+        if (state.europeanCup === undefined) state.europeanCup = null;
+        if (state.lastEventId === undefined) state.lastEventId = null;
+        if (typeof state.practiceMatchBooked !== 'boolean') state.practiceMatchBooked = false;
+        // Add missStreak to all existing players
+        if (state.rosters && typeof state.rosters === 'object') {
+          for (const teamId of Object.keys(state.rosters)) {
+            state.rosters[teamId] = (state.rosters[teamId] ?? []).map((p: any) => ({
+              ...p,
+              missStreak: p.missStreak ?? 0,
+              wage: p.wage ?? calcPlayerWage(p.skill ?? 5, p.age ?? 25),
+            }));
+          }
+        }
         return state;
       },
       storage: {

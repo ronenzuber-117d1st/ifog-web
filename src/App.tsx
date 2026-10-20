@@ -10,8 +10,10 @@ import { Stadium } from './screens/Stadium';
 import { Desk } from './screens/Desk';
 import { SackedScreen } from './screens/SackedScreen';
 import { SeasonEndScreen } from './screens/SeasonEndScreen';
+import { EuropeanCup } from './screens/EuropeanCup';
 import { useGameStore } from './store/useGameStore';
 import { playMusic, stopMusic } from './utils/sound';
+import { DevPanel } from './components/DevPanel';
 
 function RequireGame({ children }: { children: React.ReactNode }) {
   const phase = useGameStore(s => s.phase);
@@ -29,7 +31,7 @@ function MusicController() {
       playMusic('/sounds/IFOGC.mp3');
     } else if (pathname === '/desk' || pathname === '/season' || pathname === '/team' || pathname === '/finances' || pathname === '/match') {
       playMusic('/sounds/IFOGA.mp3');
-    } else if (pathname === '/sacked' || pathname === '/season-end') {
+    } else if (pathname === '/sacked' || pathname === '/season-end' || pathname === '/european-cup') {
       // these screens manage their own music
     } else {
       stopMusic();
@@ -46,6 +48,7 @@ export default function App() {
   return (
     <HashRouter>
       <MusicController />
+      <DevPanel />
       <Routes>
         <Route path="/" element={<MainMenu />} />
         <Route path="/select" element={<TeamSelect />} />
@@ -57,6 +60,7 @@ export default function App() {
         <Route path="/desk" element={<RequireGame><Desk /></RequireGame>} />
         <Route path="/sacked" element={<RequireGame><SackedScreen /></RequireGame>} />
         <Route path="/season-end" element={<RequireGame><SeasonEndScreen /></RequireGame>} />
+        <Route path="/european-cup" element={<RequireGame><EuropeanCup /></RequireGame>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </HashRouter>

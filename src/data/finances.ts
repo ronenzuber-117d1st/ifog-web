@@ -1,11 +1,11 @@
 export const TICKET_TYPES = [
-  { name: 'Reduced Seats',         capacity: 2000 },
-  { name: 'Club Members',          capacity: 3000 },
-  { name: 'Stand',                 capacity: 8000 },
-  { name: 'Terrace',               capacity: 10000 },
-  { name: 'Season Ticket Members', capacity: 2000 },
-  { name: 'Season Ticket Stand',   capacity: 2000 },
-  { name: 'Season Ticket Terrace', capacity: 2000 },
+  { name: 'Reduced Seats',         capacity: 500  },
+  { name: 'Club Members',          capacity: 750  },
+  { name: 'Stand',                 capacity: 2000 },
+  { name: 'Terrace',               capacity: 2500 },
+  { name: 'Season Ticket Members', capacity: 500  },
+  { name: 'Season Ticket Stand',   capacity: 500  },
+  { name: 'Season Ticket Terrace', capacity: 500  },
   { name: 'VIP Lounge',            capacity: 15   },
 ];
 
@@ -21,7 +21,7 @@ export const FOOD_PRICES = [1, 3, 2, 4, 5, 5, 4, 8, 10, 8];
 export const MERCH_ITEMS = ['Balls','Posters','Shirts','Glassware','Flags','Caps','Stickers','Autographs','Pillows','Computergames'];
 export const MERCH_PRICES = [40, 10, 100, 50, 100, 40, 10, 10, 100, 40];
 
-export const STARTING_BALANCE = 2_000_000;
+export const STARTING_BALANCE = 500_000;
 
 /**
  * Per-player wage per matchday.

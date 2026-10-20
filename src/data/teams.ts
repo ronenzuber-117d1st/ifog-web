@@ -1,4 +1,5 @@
 import type { Team, Player, Position } from '../types/game';
+import { calcPlayerWage } from './finances';
 
 export const LEAGUE_TEAMS: Team[] = [
   { id: 1,  name: 'Gunners',      managerName: 'Bruce Rock',      baseSkill: 60, color: '#EF4444' },
@@ -46,7 +47,25 @@ export const DIV2_TEAMS: Team[] = [
   { id: 40, name: 'The Terriers',  managerName: 'Brian Shorten',    baseSkill: 40, color: '#6366F1' },
 ];
 
-export const ALL_TEAMS: Team[] = [...LEAGUE_TEAMS, ...DIV2_TEAMS];
+export const EUROPEAN_TEAMS: Team[] = [
+  { id: 41, name: 'Bayern',     managerName: 'Maestro',      baseSkill: 80, color: '#DC2626' },
+  { id: 42, name: 'Dortmund',   managerName: 'Hitzig',       baseSkill: 58, color: '#F59E0B' },
+  { id: 43, name: 'Stuttgart',  managerName: 'Hinterlader',  baseSkill: 57, color: '#DC2626' },
+  { id: 44, name: 'Schalke',    managerName: 'Thaler',       baseSkill: 60, color: '#1D4ED8' },
+  { id: 45, name: 'Barcelona',  managerName: 'Croif',        baseSkill: 50, color: '#A855F7' },
+  { id: 46, name: 'Madrid',     managerName: 'Henkes',       baseSkill: 51, color: '#CBD5E1' },
+  { id: 47, name: 'Milano',     managerName: 'Raiuno',       baseSkill: 52, color: '#1F2937' },
+  { id: 48, name: 'Amsterdam',  managerName: 'Keskop',       baseSkill: 53, color: '#DC2626' },
+  { id: 49, name: 'Eindhoven',  managerName: 'Ademoos',      baseSkill: 54, color: '#DC2626' },
+  { id: 50, name: 'Genua',      managerName: 'Dagama',       baseSkill: 55, color: '#DC2626' },
+  { id: 51, name: 'Wien',       managerName: 'Schneckerl',   baseSkill: 56, color: '#7C3AED' },
+  { id: 52, name: 'Paris',      managerName: 'Cirak',        baseSkill: 48, color: '#1D4ED8' },
+  { id: 53, name: 'Nantes',     managerName: 'Dantes',       baseSkill: 49, color: '#F59E0B' },
+  { id: 54, name: 'Porto',      managerName: 'Bermejo',      baseSkill: 54, color: '#1D4ED8' },
+  { id: 55, name: 'Dublin',     managerName: 'Firehead',     baseSkill: 55, color: '#16A34A' },
+];
+
+export const ALL_TEAMS: Team[] = [...LEAGUE_TEAMS, ...DIV2_TEAMS, ...EUROPEAN_TEAMS];
 
 export function getTeamById(id: number): Team | undefined {
   return ALL_TEAMS.find(t => t.id === id);
@@ -159,6 +178,8 @@ function buildRoster(teamId: number, data: [string, string, number, number][]): 
     shirtNumber: 0,
     goals: 0,
     trainingProgress: 0,
+    missStreak: 0,
+    wage: calcPlayerWage(skill, age),
   }));
   return assignShirtNumbers(raw);
 }
@@ -187,17 +208,22 @@ function generateRoster(teamId: number, baseSkill: number): Player[] {
       let name = pick(namePool, rng);
       while (used.has(name)) name = pick(namePool, rng);
       used.add(name);
+      const skill = randSkill();
+      const age = randAge();
       players.push({
         id: `t${teamId}-p${_idx}`,
         name,
         position: pos,
-        skill: randSkill(),
-        age: randAge(),
+        skill,
+        age,
         injuredFor: 0,
         suspended: false,
         yellowCards: 0,
         shirtNumber: 0,
+        goals: 0,
         trainingProgress: 0,
+        missStreak: 0,
+        wage: calcPlayerWage(skill, age),
       });
       _idx++;
     }

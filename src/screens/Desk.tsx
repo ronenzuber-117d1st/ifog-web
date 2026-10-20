@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useGameStore } from '../store/useGameStore';
 import { Layout } from '../components/Layout';
 import { img } from '../utils/images';
@@ -78,6 +79,7 @@ function computeOdds(homeBase: number, awayBase: number): [number, number] {
 }
 
 export function Desk() {
+  const navigate = useNavigate();
   const {
     managerName, currentMatchday, totalMatchdays, balance, financeHistory,
     priceLevel, setPriceLevel, mediaDeal, borderSponsors,
@@ -85,6 +87,8 @@ export function Desk() {
     staff, pendingBet, eventLog,
     setStaff, setCoach, placeBet, cancelBet,
   } = useGameStore();
+
+  const inDebt = balance < 0;
 
   const [tab, setTab]                 = useState<DeskTab>('desk');
   const [personnelSub, setPersonnelSub] = useState<PersonnelSub>('fishChips');
@@ -256,7 +260,7 @@ export function Desk() {
                     </>
                   )}
                   <div style={{ flexGrow: 1 }} />
-                  <button style={{ fontSize: 13, color: '#c8f53d', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: "'Barlow', system-ui, sans-serif", fontWeight: 600 }}>View squad →</button>
+                  <button onClick={() => navigate('/team')} style={{ fontSize: 13, color: '#c8f53d', background: 'transparent', border: 'none', cursor: 'pointer', fontFamily: "'Barlow', system-ui, sans-serif", fontWeight: 600 }}>View squad →</button>
                 </div>
 
                 {/* Ticket pricing + Revenue side by side */}
@@ -299,7 +303,7 @@ export function Desk() {
                     const foodRev    = foodResult ? foodResult.revenue : 0;
                     const shopRev    = shopResult ? shopResult.revenue : 0;
                     const squad      = rosters[managedTeamId] ?? [];
-                    const wagesBill  = squad.reduce((sum, p) => sum + calcPlayerWage(p.skill, p.age), 0);
+                    const wagesBill  = squad.reduce((sum, p) => sum + (p.wage ?? calcPlayerWage(p.skill, p.age)), 0);
                     const activeBorders = borderSponsors.filter(d => d.matchdaysLeft > 0).length;
                     const totalRev   = ticketRev + foodRev + shopRev + mediaRev + borderRev;
                     const netPerMatch = totalRev - wagesBill;
@@ -388,7 +392,7 @@ export function Desk() {
                             {([0, 1, 2, 3] as const).map(t => {
                               const active = tier === t;
                               return (
-                                <button key={t} onClick={() => setStaff(s.key, t)} style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 6, padding: '14px 16px', borderRadius: 12, border: `2px solid ${active ? '#c8f53d' : '#1c2640'}`, background: active ? 'rgba(200,245,61,0.08)' : '#131c33', color: '#e8edf7', textAlign: 'left', cursor: 'pointer', fontFamily: "'Barlow', system-ui, sans-serif" }}>
+                                <button key={t} onClick={() => setStaff(s.key, t)} disabled={inDebt && costs[t] > costs[tier]} style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 6, padding: '14px 16px', borderRadius: 12, border: `2px solid ${active ? '#c8f53d' : '#1c2640'}`, background: active ? 'rgba(200,245,61,0.08)' : '#131c33', color: inDebt && costs[t] > costs[tier] ? '#3a4768' : '#e8edf7', textAlign: 'left', cursor: inDebt && costs[t] > costs[tier] ? 'not-allowed' : 'pointer', fontFamily: "'Barlow', system-ui, sans-serif" }}>
                                   {active && (
                                     <div style={{ position: 'absolute', top: 10, right: 10, width: 20, height: 20, borderRadius: '50%', background: '#c8f53d', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#070b16" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12l5 5 9-10"/></svg>
@@ -434,7 +438,7 @@ export function Desk() {
                         {COACHES.map(c => {
                           const selected = staff.coach === c.id;
                           return (
-                            <button key={c.id} onClick={() => setCoach(selected ? 0 : c.id)} style={{ display: 'flex', flexDirection: 'column', padding: 0, borderRadius: 12, border: `2px solid ${selected ? '#c8f53d' : '#1c2640'}`, background: 'transparent', cursor: 'pointer', overflow: 'hidden', textAlign: 'left' }}>
+                            <button key={c.id} onClick={() => setCoach(selected ? 0 : c.id)} disabled={inDebt && !selected} style={{ display: 'flex', flexDirection: 'column', padding: 0, borderRadius: 12, border: `2px solid ${selected ? '#c8f53d' : '#1c2640'}`, background: 'transparent', cursor: inDebt && !selected ? 'not-allowed' : 'pointer', overflow: 'hidden', textAlign: 'left', opacity: inDebt && !selected ? 0.4 : 1 }}>
                               <img src={img(`${c.img}.png`)} alt={c.name} style={{ width: '100%', height: 160, objectFit: 'cover', imageRendering: 'pixelated', display: 'block' }} />
                               <div style={{ padding: '10px 12px 12px', display: 'flex', flexDirection: 'column', gap: 3 }}>
                                 <div style={{ fontWeight: 700, fontSize: 14, color: selected ? '#c8f53d' : '#e8edf7', fontFamily: "'Barlow', system-ui, sans-serif" }}>{c.name}</div>
@@ -557,7 +561,7 @@ export function Desk() {
                         </div>
                         <div style={{ display: 'flex', gap: 6 }}>
                           {[10_000, 50_000, 100_000].map(amt => (
-                            <button key={amt} onClick={() => setBetStake(s => s + amt)} style={{ flex: 1, height: 34, borderRadius: 8, border: '1px solid #2a3656', background: '#131c33', color: '#e8edf7', fontWeight: 700, fontSize: 13, cursor: 'pointer', fontFamily: "'JetBrains Mono', monospace" }}>+£{amt / 1000}K</button>
+                            <button key={amt} onClick={() => setBetStake(s => s + amt)} disabled={inDebt} style={{ flex: 1, height: 34, borderRadius: 8, border: '1px solid #2a3656', background: '#131c33', color: inDebt ? '#3a4768' : '#e8edf7', fontWeight: 700, fontSize: 13, cursor: inDebt ? 'not-allowed' : 'pointer', fontFamily: "'JetBrains Mono', monospace" }}>+£{amt / 1000}K</button>
                           ))}
                           <button onClick={() => setBetStake(0)} style={{ height: 34, padding: '0 12px', borderRadius: 8, border: '1px solid #2a3656', background: '#131c33', color: '#8d99b5', fontWeight: 600, fontSize: 13, cursor: 'pointer', fontFamily: "'Barlow', system-ui, sans-serif" }}>Clear</button>
                         </div>
@@ -573,9 +577,10 @@ export function Desk() {
                           ))}
                         </div>
                         <button
-                          onClick={() => { if (betStake > 0) { placeBet(betStake, winMultiplier); setBetStake(0); } }}
-                          style={{ height: 52, borderRadius: 12, border: 0, background: betStake > 0 ? '#c8f53d' : '#1f2945', color: betStake > 0 ? '#070b16' : '#3d4f72', fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 900, fontSize: 22, letterSpacing: '0.14em', textTransform: 'uppercase', cursor: betStake > 0 ? 'pointer' : 'default' }}
-                        >Place Bet</button>
+                          onClick={() => { if (betStake > 0 && !inDebt) { placeBet(betStake, winMultiplier); setBetStake(0); } }}
+                          disabled={inDebt || betStake === 0}
+                          style={{ height: 52, borderRadius: 12, border: 0, background: (!inDebt && betStake > 0) ? '#c8f53d' : '#1f2945', color: (!inDebt && betStake > 0) ? '#070b16' : '#3d4f72', fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 900, fontSize: 22, letterSpacing: '0.14em', textTransform: 'uppercase', cursor: (!inDebt && betStake > 0) ? 'pointer' : 'default' }}
+                        >{inDebt ? 'Account in Debt' : 'Place Bet'}</button>
                       </div>
                       {/* Existing bets */}
                       <div style={{ padding: '14px 18px', borderRadius: 14, background: '#0f1628', border: '1px solid #1c2640' }}>

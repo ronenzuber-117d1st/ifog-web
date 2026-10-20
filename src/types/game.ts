@@ -1,5 +1,5 @@
 export type Position = 'T' | 'V' | 'M' | 'S';
-export type Formation = '4-4-2' | '4-3-3' | '3-5-2' | '5-3-2' | '4-5-1';
+export type Formation = '4-4-2' | '4-3-3' | '3-5-2' | '5-3-2' | '4-5-1' | '5-4-1' | '3-4-3';
 export type GamePhase = 'menu' | 'select' | 'setup' | 'season' | 'matchday' | 'result' | 'sacked' | 'season_end';
 
 export interface Player {
@@ -13,7 +13,9 @@ export interface Player {
   yellowCards: number;  // 0-1; 2 triggers a suspension
   shirtNumber: number;
   goals: number;
-  trainingProgress: number; // 0-5, resets on skill gain
+  trainingProgress: number; // 0–7 toward next +0.5 skill; +1 per practice, −1 per miss (floor 0)
+  missStreak: number;       // consecutive matchdays without practice; at 8 → −0.5 skill
+  wage: number;             // locked at season start; renegotiated each new season
 }
 
 export interface Team {
@@ -73,4 +75,14 @@ export interface FinanceEntry {
   description: string;
   amount: number;
   running: number;
+}
+
+export interface EuropeanCupState {
+  round: 'semi' | 'final' | 'done';
+  semiOpponentId: number;
+  finalOpponentId: number;
+  otherSemiIds: [number, number];
+  semiResult: 'win' | 'loss' | null;
+  finalResult: 'win' | 'loss' | null;
+  lastMatchReport: MatchReport | null;
 }

@@ -3,6 +3,7 @@ import { useGameStore } from '../store/useGameStore';
 import { Layout } from '../components/Layout';
 import { img } from '../utils/images';
 import type { Player, Position } from '../types/game';
+import { calcPlayerWage } from '../data/finances';
 import type { SponsorDeal } from '../store/useGameStore';
 
 type Tab = 'shirt' | 'borders' | 'transfer';
@@ -85,7 +86,20 @@ function generateHirePlayers(matchday: number, teamId: number): Player[] {
   return positions.map((pos, i) => {
     const names = HIRE_NAMES[pos];
     const name = names[Math.floor(rng() * names.length)] + ' ' + String.fromCharCode(65 + Math.floor(rng() * 26)) + '.';
-    return { id: `hire-${matchday}-${i}`, name, position: pos, skill: Math.floor(rng() * 4) + 4, age: Math.floor(rng() * 12) + 20, injuredFor: 0, suspended: false, trainingProgress: 0 };
+    const roll = rng();
+    let skill: number;
+    let age: number;
+    if (roll < 0.05) {
+      skill = 9;
+      age = Math.floor(rng() * 6) + 19; // 19–24
+    } else if (roll < 0.15) {
+      skill = 8;
+      age = Math.floor(rng() * 8) + 20; // 20–27
+    } else {
+      skill = Math.floor(rng() * 4) + 4; // 4–7
+      age = Math.floor(rng() * 12) + 20; // 20–31
+    }
+    return { id: `hire-${matchday}-${i}`, name, position: pos, skill, age, injuredFor: 0, suspended: false, yellowCards: 0, shirtNumber: 0, goals: 0, trainingProgress: 0, missStreak: 0, wage: calcPlayerWage(skill, age) };
   });
 }
 
@@ -460,7 +474,7 @@ function TransferTab({ hirePlayers, myPlayers, balance, transfersLeft, onHire, o
   const [sortKey, setSortKey] = useState<SortKey>('position');
   const [sortDir, setSortDir] = useState<1 | -1>(1);
 
-  const hireCost = (p: Player) => p.skill * 75_000;
+  const hireCost = (p: Player) => p.skill >= 8 ? Math.round(p.skill * p.skill * 20_000) : p.skill * 75_000;
   const injuryFactor = (p: Player) => p.injuredFor > 0 ? Math.max(0.3, 1 - p.injuredFor * 0.2) : 1;
   const sellPrice = (p: Player) => Math.round(p.skill * 75_000 * injuryFactor(p));
 
@@ -571,9 +585,8 @@ function TransferTab({ hirePlayers, myPlayers, balance, transfersLeft, onHire, o
             {rows.map(p => {
               const pr = isBuy ? hireCost(p) : sellPrice(p);
               const noTransfers = transfersLeft <= 0;
-              const noMoney = isBuy && pr > balance;
-              const blocked = noTransfers || noMoney;
-              const why = noTransfers ? 'No transfers left' : noMoney ? 'Not enough cash' : '';
+              const blocked = noTransfers;
+              const why = noTransfers ? 'No transfers left' : '';
               const ini = p.name.slice(0, 1).toUpperCase();
               const posC = POS_COLOR[p.position] ?? '#8d99b5';
 

@@ -6,6 +6,8 @@ const FORMATION_MODS: Record<Formation, { atk: number; def: number }> = {
   '3-5-2': { atk: 1.05, def: 0.95 },
   '5-3-2': { atk: 0.88, def: 1.15 },
   '4-5-1': { atk: 0.80, def: 1.10 },
+  '5-4-1': { atk: 0.75, def: 1.20 },
+  '3-4-3': { atk: 1.25, def: 0.82 },
 };
 
 function poisson(lambda: number): number {
@@ -219,8 +221,28 @@ export function simulateFullMatch(
   events.length = 0;
   events.push(...filteredEvents);
 
+  // MoM: weighted by skill + 4 per goal scored; sent-off players and own-goal scorers ineligible
+  const goalCounts = new Map<string, number>();
+  const ownGoalScorers = new Set<string>();
+  for (const evt of filteredEvents) {
+    if (evt.type === 'goal') {
+      if (evt.detail === 'owngoal') {
+        ownGoalScorers.add(evt.playerName);
+      } else {
+        goalCounts.set(evt.playerName, (goalCounts.get(evt.playerName) ?? 0) + 1);
+      }
+    }
+  }
   const allPlayers = [...homePlayers, ...awayPlayers];
-  const manOfMatch = allPlayers[Math.floor(Math.random() * allPlayers.length)]?.name ?? 'Unknown';
+  const eligible = allPlayers.filter(p => !sentOff.has(p.name) && !ownGoalScorers.has(p.name));
+  const weights = eligible.map(p => (p.skill ?? 5) + (goalCounts.get(p.name) ?? 0) * 4);
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+  let rand = Math.random() * totalWeight;
+  let manOfMatch = eligible[0]?.name ?? 'Unknown';
+  for (let i = 0; i < eligible.length; i++) {
+    rand -= weights[i];
+    if (rand <= 0) { manOfMatch = eligible[i].name; break; }
+  }
 
   const played: Fixture = { ...fixture, homeGoals, awayGoals };
   return { fixture: played, events, manOfMatch };

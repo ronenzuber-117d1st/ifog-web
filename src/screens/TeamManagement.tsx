@@ -7,7 +7,7 @@ import type { Formation, Position } from '../types/game';
 type MainTab = 'team' | 'training' | 'statistics' | 'photo';
 
 /* ─── constants ─────────────────────────────────────── */
-const FORMATIONS: Formation[] = ['4-4-2', '4-3-3', '3-5-2', '5-3-2', '4-5-1'];
+const FORMATIONS: Formation[] = ['4-4-2', '4-3-3', '3-5-2', '5-3-2', '4-5-1', '5-4-1', '3-4-3'];
 const STYLES = ['Cautious', 'Balanced', 'Aggressive'];
 const POS_LABEL: Record<Position, string> = { T: 'GK', V: 'DEF', M: 'MID', S: 'FWD' };
 const POS_COLOR: Record<Position, string> = { T: '#f5b94a', V: '#7fb2ff', M: '#5fd49a', S: '#ff7a6b' };
@@ -23,12 +23,17 @@ function focusImg(base: string, units: number) {
   return `${base}${units <= 3 ? 1 : units <= 6 ? 2 : 3}.png`;
 }
 
-function getPlayerSprite(position: Position, idx: number): string {
-  if (position === 'T') return `torwart${(idx % 4) + 1}.png`;
-  if (position === 'V') return `vertei${(idx % 4) + 1}.png`;
-  if (position === 'M') return `mittelf${(idx % 4) + 1}.png`;
-  if (position === 'S') return `sturm${(idx % 4) + 1}.png`;
-  return 'spieler0.png';
+function skillTier(skill: number) { return skill <= 5 ? 1 : skill <= 7.5 ? 2 : 3; }
+
+function getPlayerSprite(position: Position, skill: number, name: string): string {
+  const tier = skillTier(skill);
+  const hash = name.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+  const v = hash % 2 === 0 ? '' : 'e';
+  if (position === 'T') return `torwart${tier}.png`;
+  if (position === 'V') return `vertei${tier}${v}.png`;
+  if (position === 'M') return `mittelf${tier}${v}.png`;
+  if (position === 'S') return `sturm${tier}${v}.png`;
+  return `torwart${tier}.png`;
 }
 function fitColor(v: number) { return v >= 85 ? '#5fd49a' : v >= 75 ? '#f5c76b' : '#ff7a6b'; }
 function ordinal(n: number) {
@@ -42,7 +47,7 @@ export function TeamManagement() {
   const {
     managedTeamId, rosters, formation, setFormation, table,
     trainingMassage, trainingSkills, trainingShape, setTraining,
-    startingXI, setStartingXI, balance, bookPracticeMatch, stadium,
+    startingXI, setStartingXI, balance, bookPracticeMatch, practiceMatchBooked, stadium,
   } = useGameStore();
 
   const [mainTab, setMainTab]   = useState<MainTab>('team');
@@ -51,7 +56,6 @@ export function TeamManagement() {
   const [statsPos, setStatsPos] = useState<string>('All');
   const [sortKey, setSortKey]   = useState<string>('idx');
   const [sortDir, setSortDir]   = useState<1 | -1>(1);
-  const [practiceBooked, setPracticeBooked] = useState(false);
 
   const players = rosters[managedTeamId] ?? [];
   const tablePos = table.findIndex(r => r.teamId === managedTeamId) + 1;
@@ -112,8 +116,12 @@ export function TeamManagement() {
   const maxUnits = allAtLevel(3) ? 10 : allAtLevel(2) ? 9 : 7;
   const remaining = maxUnits - used;
 
+  const fitPlayers = players.filter(p => !p.injuredFor && !p.suspended);
+  const avgSkill   = fitPlayers.length > 0 ? fitPlayers.reduce((s, p) => s + p.skill, 0) / fitPlayers.length : 5;
   const motivation = Math.min(100, Math.round(50 + trainingMassage * 5));
-  const skillStat  = Math.min(100, Math.round(50 + trainingSkills * 5));
+  const skillBase  = ((avgSkill - 3) / 6) * 100;
+  const skillBonus = trainingSkills * ((avgSkill - 3) / 6) * 5;
+  const skillStat  = Math.min(100, Math.round(skillBase + skillBonus));
   const shapeStat  = Math.min(100, Math.round(50 + trainingShape * 5));
   const overall    = Math.round((motivation + skillStat + shapeStat) / 3);
   const condBars = [{ label: 'Motivation', v: motivation, color: '#5fd49a' }, { label: 'Skills', v: skillStat, color: '#7fb2ff' }, { label: 'Shape', v: shapeStat, color: '#f5b94a' }];
@@ -126,10 +134,10 @@ export function TeamManagement() {
   };
 
   /* ── Statistics ── */
-  const salary = (skill: number) => Math.round(skill * 800 + 5000);
+  const salary = (p: { skill: number; age: number; wage?: number }) => p.wage ?? Math.round(p.skill * p.skill * 150 + Math.max(0, 32 - p.age) * p.skill * 40);
   const POS_SORT: Record<Position, number> = { T: 0, V: 1, M: 2, S: 3 };
   const allStats = players.map((p, i) => ({
-    idx: i, ...p, sal: salary(p.skill), fit: Math.min(100, Math.round(50 + trainingShape * 5)),
+    idx: i, ...p, sal: salary(p), fit: Math.min(100, Math.round(50 + trainingShape * 5)),
     goals: p.goals ?? 0,
     posOrder: POS_SORT[p.position],
   }));
@@ -242,8 +250,14 @@ export function TeamManagement() {
                             style={{ position: 'relative', display: 'flex', flexDirection: 'column', padding: 0, borderRadius: 12, overflow: 'hidden', border: `2px solid ${inXI ? '#c8f53d' : '#1c2640'}`, background: '#0f1628', color: '#e8edf7', textAlign: 'left', opacity: inXI ? 1 : (unavailable ? 0.7 : 0.62), cursor: unavailable ? 'default' : 'pointer', width: 136, flexShrink: 0 }}
                           >
                             {/* Image area */}
-                            <div style={{ position: 'relative', width: '100%', height: 72, background: '#1040f8' }}>
-                              <img src={img(getPlayerSprite(player.position, idx))} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', imageRendering: 'pixelated', display: 'block' }} />
+                            <div style={{ position: 'relative', width: '100%', height: 120, background: '#0a0f1d' }}>
+                              <img
+                                src={img(getPlayerSprite(player.position, player.skill, player.name))}
+                                onError={(e) => { (e.currentTarget as HTMLImageElement).onerror = null; (e.currentTarget as HTMLImageElement).src = img(`torwart${skillTier(player.skill)}.png`); }}
+
+                                alt=""
+                                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center 15%', display: 'block' }}
+                              />
                               {/* Fitness badge */}
                               <div style={{ position: 'absolute', left: 6, top: 6, padding: '1px 6px', borderRadius: 5, background: 'rgba(7,11,22,0.85)', fontFamily: "'JetBrains Mono', monospace", fontSize: 11, fontWeight: 700, color: fitColor(fit) }}>{fit}%</div>
                               {/* XI check */}
@@ -262,7 +276,7 @@ export function TeamManagement() {
                               {suspended && <div style={{ position: 'absolute', inset: 0, background: 'rgba(7,11,22,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 6, background: '#e8484d', color: '#fff', fontSize: 12, fontWeight: 700 }}><div style={{ width: 8, height: 11, borderRadius: 1, background: '#fff', border: '1px solid rgba(0,0,0,0.3)', flexShrink: 0 }} />Suspended</div></div>}
                             </div>
                             {/* Name + skill */}
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4, padding: '7px 8px' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 4, padding: '7px 8px 4px' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
                                 <div style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 11, color: g.color, flexShrink: 0 }}>{player.shirtNumber ?? '—'}</div>
                                 <div style={{ fontWeight: 700, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{player.name}</div>
@@ -271,6 +285,10 @@ export function TeamManagement() {
                                 <span style={{ fontSize: 10, color: '#f5c76b' }}>★</span>
                                 <span style={{ fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, fontSize: 12, color: '#f5c76b' }}>{player.skill}</span>
                               </div>
+                            </div>
+                            {/* Training progress bar — 8 sessions = +0.5 skill */}
+                            <div style={{ height: 3, background: '#0a0f1d', margin: '0 6px 5px', borderRadius: 2 }}>
+                              <div style={{ height: '100%', width: `${((player.trainingProgress ?? 0) / 8) * 100}%`, background: (player.trainingProgress ?? 0) >= 6 ? '#c8f53d' : '#3a6b3a', borderRadius: 2, transition: 'width 0.3s' }} />
                             </div>
                           </button>
                         );
@@ -328,7 +346,7 @@ export function TeamManagement() {
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexShrink: 0 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <div style={{ fontSize: 12, letterSpacing: '0.16em', textTransform: 'uppercase', color: '#8d99b5', fontWeight: 600 }}>Training units</div>
-                  <div style={{ fontSize: 14, color: '#8d99b5' }}>Split this week's 7 units across the three areas.</div>
+                  <div style={{ fontSize: 14, color: '#8d99b5' }}>Split this matchday's units across the three areas.</div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
@@ -401,14 +419,14 @@ export function TeamManagement() {
             {/* Book Practice Match button — row 2, col 3 */}
             {(() => {
               const canAfford = balance >= 87_300;
-              const disabled = practiceBooked || !canAfford;
-              const label = practiceBooked ? '✓ Practice booked' : !canAfford ? 'Insufficient funds' : 'Book practice match';
-              const borderColor = practiceBooked ? '#8d99b5' : canAfford ? '#c8f53d' : '#374151';
-              const color = practiceBooked ? '#8d99b5' : canAfford ? '#c8f53d' : '#374151';
+              const disabled = practiceMatchBooked || !canAfford;
+              const label = practiceMatchBooked ? '✓ Practice booked' : !canAfford ? 'Insufficient funds' : 'Book practice match';
+              const borderColor = practiceMatchBooked ? '#8d99b5' : canAfford ? '#c8f53d' : '#374151';
+              const color = practiceMatchBooked ? '#8d99b5' : canAfford ? '#c8f53d' : '#374151';
               return (
                 <button
                   disabled={disabled}
-                  onClick={() => { bookPracticeMatch(); setPracticeBooked(true); }}
+                  onClick={() => { bookPracticeMatch(); }}
                   style={{ gridColumn: 3, gridRow: 2, borderRadius: 12, border: `2px solid ${borderColor}`, background: 'transparent', color, fontFamily: "'Big Shoulders Display', Impact, sans-serif", fontWeight: 900, fontSize: 22, letterSpacing: '0.14em', textTransform: 'uppercase', cursor: disabled ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 >
                   {label}

@@ -81,7 +81,7 @@ export function Stadium() {
     stadium, balance, upgradeStadium, buyVipLounge,
     staff, currentMatchday, fixtures, managedTeamId,
     mediaDeal, signMediaDeal, cancelMediaDeal, table, priceLevel,
-    foodStock, shopStock, chairmanPortraitIdx,
+    foodStock, shopStock, chairmanPortraitIdx, lastMatch,
   } = useGameStore();
 
   const [tab, setTab] = useState<StadiumTab>('stadium');
@@ -89,6 +89,35 @@ export function Stadium() {
   const [fishQty,  setFishQty]  = useState<number | ''>('');
   const [shopItem, setShopItem] = useState(0);
   const [shopQty,  setShopQty]  = useState<number | ''>('');
+
+  // President quote — context-aware
+  const sortedTable = [...table].sort((a, b) => b.points - a.points || (b.goalsFor - b.goalsAgainst) - (a.goalsFor - a.goalsAgainst));
+  const myPos = sortedTable.findIndex(r => r.teamId === managedTeamId) + 1;
+  const totalTeams = table.length;
+  const inRelegation = myPos > totalTeams - 3;
+  const inTopHalf = myPos <= totalTeams / 2;
+  const lmHome = lastMatch?.fixture.homeTeamId === managedTeamId;
+  const lmMyGoals = lastMatch ? (lmHome ? lastMatch.fixture.homeGoals : lastMatch.fixture.awayGoals) : null;
+  const lmOppGoals = lastMatch ? (lmHome ? lastMatch.fixture.awayGoals : lastMatch.fixture.homeGoals) : null;
+  const lastResult = lmMyGoals === null ? null : lmMyGoals > lmOppGoals! ? 'win' : lmMyGoals < lmOppGoals! ? 'loss' : 'draw';
+  const presidentQuote = (() => {
+    if (!lastResult) return "Full confidence in our Manager. Let's have a great season!";
+    if (lastResult === 'win') {
+      if (myPos === 1) return "Top of the table! Nobody beats our Manager!";
+      if (myPos <= 3)  return "Excellent! We're right in the title race!";
+      if (inTopHalf)   return "That's the spirit! Keep those wins coming!";
+      return "A much-needed win! Now let's build on this!";
+    }
+    if (lastResult === 'loss') {
+      if (inRelegation) return "This is a crisis! We must not go down!";
+      if (!inTopHalf)   return "We simply cannot lose matches like that.";
+      return "Disappointing. I expect much better from this squad.";
+    }
+    // draw
+    if (myPos <= 3)   return "We need to be winning these games, not drawing!";
+    if (inRelegation) return "A point helps, but we desperately need wins!";
+    return "A point is a point, I suppose. We push on.";
+  })();
 
   const pitchLevel  = stadium.pitch      as 1 | 2 | 3;
   const seatsLevel  = stadium.seats      as 1 | 2 | 3;
@@ -223,7 +252,7 @@ export function Stadium() {
                     <img src={img(`${TEAM_PORTRAITS[chairmanPortraitIdx]}.png`)} alt="" style={{ width: '130px', imageRendering: 'pixelated' }} />
                     <div style={{ fontSize: '22px', fontWeight: 'bold', fontFamily: 'Georgia, serif' }}>The President</div>
                     <div style={{ fontSize: '18px', fontStyle: 'italic', lineHeight: '1.6' }}>
-                      {myShare >= oppShare ? "Nobody beats our Manager!" : "We must do better!"}
+                      {presidentQuote}
                     </div>
                   </div>
 
@@ -320,10 +349,10 @@ export function Stadium() {
                           Cost: <strong>£{(FISH_ITEMS[fishItem].price * (fishQty || 0)).toFixed(2)}</strong>
                         </div>
                         <button
-                          disabled={!fishQty || balance < FISH_ITEMS[fishItem].price * fishQty}
+                          disabled={!fishQty}
                           onClick={() => {
                             const cost = FISH_ITEMS[fishItem].price * (fishQty || 0);
-                            if (!fishQty || balance < cost) return;
+                            if (!fishQty) return;
                             useGameStore.setState(s => ({
                               balance: s.balance - cost,
                               foodStock: s.foodStock.map((n, i) => i === fishItem ? n + (fishQty as number) : n),
@@ -336,7 +365,7 @@ export function Stadium() {
                             }));
                             setFishQty('');
                           }}
-                          style={{ padding: '4px 10px', border: '1px solid #888', fontSize: '14px', cursor: balance >= FISH_ITEMS[fishItem].price * fishQty ? 'pointer' : 'default', background: balance >= FISH_ITEMS[fishItem].price * fishQty ? '#ddd' : '#c8c8c8' }}>
+                          style={{ padding: '4px 10px', border: '1px solid #888', fontSize: '14px', cursor: fishQty ? 'pointer' : 'default', background: fishQty ? '#ddd' : '#c8c8c8' }}>
                           BUY &gt;&gt;
                         </button>
                       </div>
@@ -345,7 +374,6 @@ export function Stadium() {
                         const demand = calcFoodSales(attendance, staff.fishChips).unitsSold;
                         const shortfall = demand.map((qty, i) => Math.max(0, qty - foodStock[i]));
                         const restockCost = shortfall.reduce((sum, qty, i) => sum + qty * FISH_ITEMS[i].price, 0);
-                        const canAfford = balance >= restockCost;
                         const nothingNeeded = restockCost === 0;
                         return (
                           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -354,13 +382,13 @@ export function Stadium() {
                               Cost: <strong>£{restockCost.toLocaleString()}</strong>
                             </span>
                             <button
-                              disabled={nothingNeeded || !canAfford}
+                              disabled={nothingNeeded}
                               onClick={() => {
                                 useGameStore.setState(s => {
                                   const d = calcFoodSales(attendance, staff.fishChips).unitsSold;
                                   const sf = d.map((qty, i) => Math.max(0, qty - s.foodStock[i]));
                                   const cost = sf.reduce((sum, qty, i) => sum + qty * FISH_ITEMS[i].price, 0);
-                                  if (cost <= 0 || s.balance < cost) return s;
+                                  if (cost <= 0) return s;
                                   return {
                                     balance: s.balance - cost,
                                     foodStock: s.foodStock.map((qty, i) => qty + sf[i]),
@@ -373,7 +401,7 @@ export function Stadium() {
                                   };
                                 });
                               }}
-                              style={{ padding: '4px 10px', border: '1px solid #888', fontSize: '14px', cursor: (!nothingNeeded && canAfford) ? 'pointer' : 'default', background: nothingNeeded ? '#e8e8e8' : canAfford ? '#ddd' : '#c8c8c8', color: nothingNeeded ? '#999' : '#000' }}>
+                              style={{ padding: '4px 10px', border: '1px solid #888', fontSize: '14px', cursor: !nothingNeeded ? 'pointer' : 'default', background: nothingNeeded ? '#e8e8e8' : '#ddd', color: nothingNeeded ? '#999' : '#000' }}>
                               {nothingNeeded ? 'Fully stocked' : 'RESTOCK ALL >>'}
                             </button>
                           </div>
@@ -462,10 +490,10 @@ export function Stadium() {
                           Cost: <strong>£{(SHOP_ITEMS[shopItem].price * (shopQty || 0)).toFixed(2)}</strong>
                         </div>
                         <button
-                          disabled={!shopQty || balance < SHOP_ITEMS[shopItem].price * (shopQty || 0)}
+                          disabled={!shopQty}
                           onClick={() => {
                             const cost = SHOP_ITEMS[shopItem].price * (shopQty || 0);
-                            if (!shopQty || balance < cost) return;
+                            if (!shopQty) return;
                             useGameStore.setState(s => ({
                               balance: s.balance - cost,
                               shopStock: s.shopStock.map((n, i) => i === shopItem ? n + (shopQty as number) : n),
@@ -478,7 +506,7 @@ export function Stadium() {
                             }));
                             setShopQty('');
                           }}
-                          style={{ padding: '4px 10px', border: '1px solid #888', fontSize: '14px', cursor: shopQty && balance >= SHOP_ITEMS[shopItem].price * (shopQty || 0) ? 'pointer' : 'default', background: shopQty && balance >= SHOP_ITEMS[shopItem].price * (shopQty || 0) ? '#ddd' : '#c8c8c8' }}>
+                          style={{ padding: '4px 10px', border: '1px solid #888', fontSize: '14px', cursor: shopQty ? 'pointer' : 'default', background: shopQty ? '#ddd' : '#c8c8c8' }}>
                           BUY &gt;&gt;
                         </button>
                       </div>
@@ -487,7 +515,6 @@ export function Stadium() {
                         const demand = calcMerchSales(attendance, staff.fanShop).unitsSold;
                         const shortfall = demand.map((qty, i) => Math.max(0, qty - shopStock[i]));
                         const restockCost = shortfall.reduce((sum, qty, i) => sum + qty * SHOP_ITEMS[i].price, 0);
-                        const canAfford = balance >= restockCost;
                         const nothingNeeded = restockCost === 0;
                         return (
                           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -496,13 +523,13 @@ export function Stadium() {
                               Cost: <strong>£{restockCost.toLocaleString()}</strong>
                             </span>
                             <button
-                              disabled={nothingNeeded || !canAfford}
+                              disabled={nothingNeeded}
                               onClick={() => {
                                 useGameStore.setState(s => {
                                   const d = calcMerchSales(attendance, staff.fanShop).unitsSold;
                                   const sf = d.map((qty, i) => Math.max(0, qty - s.shopStock[i]));
                                   const cost = sf.reduce((sum, qty, i) => sum + qty * SHOP_ITEMS[i].price, 0);
-                                  if (cost <= 0 || s.balance < cost) return s;
+                                  if (cost <= 0) return s;
                                   return {
                                     balance: s.balance - cost,
                                     shopStock: s.shopStock.map((qty, i) => qty + sf[i]),
@@ -515,7 +542,7 @@ export function Stadium() {
                                   };
                                 });
                               }}
-                              style={{ padding: '4px 10px', border: '1px solid #888', fontSize: '14px', cursor: (!nothingNeeded && canAfford) ? 'pointer' : 'default', background: nothingNeeded ? '#e8e8e8' : canAfford ? '#ddd' : '#c8c8c8', color: nothingNeeded ? '#999' : '#000' }}>
+                              style={{ padding: '4px 10px', border: '1px solid #888', fontSize: '14px', cursor: !nothingNeeded ? 'pointer' : 'default', background: nothingNeeded ? '#e8e8e8' : '#ddd', color: nothingNeeded ? '#999' : '#000' }}>
                               {nothingNeeded ? 'Fully stocked' : 'RESTOCK ALL >>'}
                             </button>
                           </div>
