@@ -70,9 +70,9 @@ const SHOP_ITEMS = [
 // One portrait per team (20 teams, 20 distinct portraits)
 const TEAM_PORTRAITS = [
   'manag1_1','manag2_1','manag3_1','manag4_1','manag5_1',
-  'manag6_1','manak1_1','manak2_1','manak3_1','manak4_1',
+  'manag6_1','manak1_1','manak2_1','manak4_1','manak4_1',
   'manag1_2','manag2_2','manag3_2','manag4_2','manag5_2',
-  'manag6_2','manak1_2','manak2_2','manak3_2','manak4_2',
+  'manag6_2','manak1_2','manak2_2','manak4_2','manak4_2',
 ];
 
 export function Stadium() {
